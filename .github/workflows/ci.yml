@@ -1,0 +1,60 @@
+name: CI
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    packages: write
+
+jobs:
+    check:
+        name: Nix Flake Check
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Install Nix
+              uses: DeterminateSystems/nix-installer-action@v13
+
+            - name: Setup Nix cache
+              uses: DeterminateSystems/magic-nix-cache-action@v7
+
+            - name: Run flake checks
+              run: nix flake check --print-build-logs
+
+    build-and-push:
+        name: Build and Push Docker Image
+        needs: check
+        runs-on: ubuntu-latest
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v6
+
+            - name: Install Nix
+              uses: DeterminateSystems/nix-installer-action@main
+
+            - name: Setup Nix cache
+              uses: DeterminateSystems/magic-nix-cache-action@main
+
+            - name: Build Docker image
+              run: |
+                  nix build .#dockerImage
+                  docker load < result
+
+            - name: Log in to GitHub Container Registry
+              uses: docker/login-action@v3
+              with:
+                  registry: ghcr.io
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Push Docker image
+              run: |
+                  docker push ghcr.io/kiranshila/doplarr_rs:latest

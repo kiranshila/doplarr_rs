@@ -1,0 +1,27 @@
+[package]
+name = "sonarr_api"
+version = "3.0.0"
+authors = ["OpenAPI Generator team and contributors"]
+description = "Sonarr API docs - The v3 API docs apply to both v3 and v4 versions of Sonarr. Some functionality may only be available in v4 of the Sonarr application."
+license = "GPL-3.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "^1.0", features = ["derive"] }
+serde_with = { version = "^3.8", default-features = false, features = [
+  "base64",
+  "std",
+  "macros",
+] }
+serde_json = "^1.0"
+serde_repr = "^0.1"
+url = "^2.5"
+reqwest = { version = "^0.12", default-features = false, features = [
+  "json",
+  "multipart",
+] }
+
+[features]
+default = ["native-tls"]
+native-tls = ["reqwest/native-tls"]
+rustls-tls = ["reqwest/rustls-tls"]
