@@ -39,7 +39,7 @@ pub const EARLY_STOP_MESSAGE: &str = "Already requested - nothing more to add";
 /// Discord's maximum number of options in a dropdown menu
 pub const MAX_DROPDOWN_OPTIONS: usize = 25;
 
-const ACCENT_COLOR: u32 = 0x7289DA;
+const ACCENT_COLOR: u32 = 0xCE4A28;
 
 const INTERACTION_TIMEOUT_DURATION: Duration = Duration::from_secs(300);
 
