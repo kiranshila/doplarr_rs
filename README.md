@@ -1,7 +1,5 @@
-# Doplarr
-
 <p align="center">
-  <img src="logos/logo.svg" alt="Doplarr Logo" width="200">
+  <img src="logos/logo-with-text.svg" alt="Doplarr" width="600">
 </p>
 
 [![CI](https://github.com/kiranshila/doplarr_rs/actions/workflows/ci.yml/badge.svg)](https://github.com/kiranshila/doplarr_rs/actions/workflows/ci.yml)
