@@ -245,6 +245,11 @@ async fn main() -> anyhow::Result<()> {
                             user_id: interaction
                                 .author_id()
                                 .expect("Interaction must have a user"),
+                            channel_id: interaction
+                                .channel
+                                .as_ref()
+                                .expect("Interaction must have a channel")
+                                .id,
                         };
 
                         // Spawn the coroutine

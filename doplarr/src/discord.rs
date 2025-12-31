@@ -18,7 +18,7 @@ use twilight_model::{
     http::interaction::{InteractionResponse, InteractionResponseType},
     id::{
         Id,
-        marker::{ApplicationMarker, InteractionMarker, UserMarker},
+        marker::{ApplicationMarker, ChannelMarker, InteractionMarker, UserMarker},
     },
 };
 use twilight_util::builder::{
@@ -38,6 +38,9 @@ pub const EARLY_STOP_MESSAGE: &str = "Already requested - nothing more to add";
 
 /// Discord's maximum number of options in a dropdown menu
 pub const MAX_DROPDOWN_OPTIONS: usize = 25;
+
+/// Discord's maximum character length for text content in components
+const MAX_TEXT_CONTENT_LENGTH: usize = 4000;
 
 const ACCENT_COLOR: u32 = 0xCE4A28;
 
@@ -214,34 +217,35 @@ fn build_request_component(
 
     // Build the media overview
     if let Some(thumbnail_url) = &display_info.thumbnail_url {
-        container = container.component(
-            SectionBuilder::new(
-                ThumbnailBuilder::new(UnfurledMediaItem {
-                    url: thumbnail_url.clone(),
-                    proxy_url: None,
-                    height: None,
-                    width: None,
-                    content_type: None,
-                })
-                .build(),
-            )
-            .component(TextDisplayBuilder::new(format!("# {}", display_info.title)).build())
-            .component(
-                display_info
-                    .subtitle
-                    .as_ref()
-                    .map(|s| TextDisplayBuilder::new(format!("-# {}", s)).build())
-                    .unwrap_or_else(|| TextDisplayBuilder::new("").build()),
-            )
-            .component(
-                display_info
-                    .description
-                    .as_ref()
-                    .map(|d| TextDisplayBuilder::new(d).build())
-                    .unwrap_or_else(|| TextDisplayBuilder::new("").build()),
-            )
+        let mut section = SectionBuilder::new(
+            ThumbnailBuilder::new(UnfurledMediaItem {
+                url: thumbnail_url.clone(),
+                proxy_url: None,
+                height: None,
+                width: None,
+                content_type: None,
+            })
             .build(),
-        );
+        )
+        .component(TextDisplayBuilder::new(format!("# {}", display_info.title)).build());
+
+        // Only add subtitle if it exists
+        if let Some(subtitle) = &display_info.subtitle {
+            section =
+                section.component(TextDisplayBuilder::new(format!("-# {}", subtitle)).build());
+        }
+
+        // Only add description if it exists, and truncate if needed
+        if let Some(description) = &display_info.description {
+            let truncated = if description.len() > MAX_TEXT_CONTENT_LENGTH {
+                format!("{}...", &description[..MAX_TEXT_CONTENT_LENGTH - 3])
+            } else {
+                description.clone()
+            };
+            section = section.component(TextDisplayBuilder::new(&truncated).build());
+        }
+
+        container = container.component(section.build());
     } else {
         container = container
             .component(TextDisplayBuilder::new(format!("# {}", display_info.title)).build());
@@ -250,7 +254,12 @@ fn build_request_component(
                 container.component(TextDisplayBuilder::new(format!("-# {}", subtitle)).build());
         }
         if let Some(description) = &display_info.description {
-            container = container.component(TextDisplayBuilder::new(description).build());
+            let truncated = if description.len() > MAX_TEXT_CONTENT_LENGTH {
+                format!("{}...", &description[..MAX_TEXT_CONTENT_LENGTH - 3])
+            } else {
+                description.clone()
+            };
+            container = container.component(TextDisplayBuilder::new(&truncated).build());
         }
     }
 
@@ -362,6 +371,7 @@ pub struct InteractionStart {
     pub application_id: Id<ApplicationMarker>,
     pub token: String,
     pub user_id: Id<UserMarker>,
+    pub channel_id: Id<ChannelMarker>,
 }
 
 #[derive(Debug)]
@@ -388,6 +398,7 @@ pub async fn run_interaction(
         application_id,
         token,
         user_id,
+        channel_id,
     } = start;
 
     info!(uuid = %uuid, query = %query, "Starting interaction flow");
@@ -598,20 +609,19 @@ pub async fn run_interaction(
     .await
     .context("Failed to send success response")?;
 
-    // Send public follow-up if configured
+    // Send public message to channel if configured
     if public_followup {
         let success_component = build_success_component(user_id, &success_msg);
         let result = discord_http
-            .interaction(application_id)
-            .create_followup(&token)
+            .create_message(channel_id)
             .flags(MessageFlags::IS_COMPONENTS_V2)
             .components(&[success_component])
             .await;
 
         if let Err(ref e) = result {
-            error!("Discord followup error: {:?}", e);
+            error!("Discord channel message error: {:?}", e);
         }
-        result.context("Failed to create followup message")?;
+        result.context("Failed to send channel message")?;
     }
 
     info!(uuid = %uuid, "Interaction flow completed successfully");

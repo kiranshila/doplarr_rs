@@ -63,7 +63,9 @@ If you're migrating from the Clojure version of Doplarr:
    - Create a new application
    - Go to the "Bot" section and create a bot
    - Copy the bot token (you'll need this for configuration)
-   - Under "OAuth2" → "URL Generator", select scopes: `bot`, `applications.commands`
+   - Under "OAuth2" → "URL Generator":
+     - Select scopes: `bot`, `applications.commands`
+     - Select bot permissions: `Send Messages` (required if `public_followup` is enabled)
    - Use the generated URL to invite the bot to your server
 
 2. **Sonarr and/or Radarr**
@@ -146,6 +148,7 @@ log_level = "doplarr=info"
 
 # Optional: Make follow-up messages public (default: true)
 # Set to false to keep all bot responses ephemeral (only visible to requester)
+# Note: Requires "Send Messages" permission in Discord when enabled
 public_followup = true
 
 # Configure Radarr for movie requests
