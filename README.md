@@ -27,6 +27,13 @@ This is a **complete rewrite** of the [original Doplarr](https://github.com/kira
 - **Docker Support**: Pre-built containers available via GitHub Container Registry
 - **Extensible**: Clean architecture for adding additional *arr backends
 
+## Screenshots
+
+<p align="center">
+  <img src="screenshots/slash.png" alt="Slash command interface" width="400">
+  <img src="screenshots/series.png" alt="Series selection interface" width="400">
+</p>
+
 ## What's Different from the Original?
 
 If you're migrating from the Clojure version of Doplarr:
@@ -35,6 +42,7 @@ If you're migrating from the Clojure version of Doplarr:
 |---------|-------------------|---------------------|
 | **Discord UI** | V1 Components | V2 Components (richer layouts) |
 | **Configuration** | EDN file or env vars | TOML with validation & helpful errors |
+| **Configuration Options** | Basic settings | More robust options (series type: Standard/Anime/Daily, monitor types, minimum availability, etc.) |
 | **Logging** | Basic logging | Structured logging with granular levels |
 | **Runtime** | Requires Java 11+ | Native binary |
 | **Resource Usage** | JVM overhead | Native binary (lightweight) |
@@ -187,6 +195,7 @@ allowed_monitor_types = ["firstSeason", "lastSeason", "latestSeason", "pilot", "
 ### Configuration Tips
 
 - **At least one backend required**: You must configure either `movie_backend` or `series_backend` (or both)
+- **Optional settings**: When optional settings (quality_profile, rootfolder, monitor_type, etc.) are not specified in the config, users will be able to select them at runtime through the Discord interface
 - **Quality profiles**: Use the exact name as shown in Sonarr/Radarr settings
 - **Root folders**: Must be a path that exists in your *arr configuration
 - **Monitor types for Sonarr**: The `allowed_monitor_types` setting restricts user choices, preventing selections like "all" which might download too much
