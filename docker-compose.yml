@@ -1,8 +1,7 @@
 services:
-  doplarr:
-    image: ghcr.io/kiranshila/doplarr_rs:latest
-    container_name: doplarr
-    restart: unless-stopped
-    volumes:
-      - ./config.toml:/config.toml:ro
-    network_mode: host
+    doplarr:
+        image: ghcr.io/kiranshila/doplarr_rs:latest
+        container_name: doplarr
+        restart: unless-stopped
+        volumes:
+            - ./config.toml:/config.toml:ro

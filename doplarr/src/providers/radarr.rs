@@ -4,6 +4,7 @@ use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use radarr_api::{
     apis::{
+        Error as RadarrApiError,
         configuration::{ApiKey, Configuration},
         movie_api::api_v3_movie_post,
         movie_lookup_api::api_v3_movie_lookup_get,
@@ -15,6 +16,28 @@ use radarr_api::{
         RootFolderResource,
     },
 };
+use tracing::{debug, error, info, trace};
+
+/// Helper function to log detailed error information from Radarr API responses
+fn log_api_error<T: std::fmt::Debug>(err: &RadarrApiError<T>, context: &str) {
+    match err {
+        RadarrApiError::ResponseError(response) => {
+            super::api_logging::log_api_error_details(response.status, &response.content, context);
+            if let Some(ref entity) = response.entity {
+                debug!("Parsed error entity: {:#?}", entity);
+            }
+        }
+        RadarrApiError::Reqwest(e) => {
+            error!("{} - Reqwest error: {}", context, e);
+        }
+        RadarrApiError::Serde(e) => {
+            error!("{} - Serialization error: {}", context, e);
+        }
+        RadarrApiError::Io(e) => {
+            error!("{} - IO error: {}", context, e);
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Radarr {
@@ -51,6 +74,9 @@ impl Radarr {
         minimum_availability: Option<MovieStatusType>,
         client: reqwest::Client,
     ) -> Result<Self> {
+        // Log connection before moving base_path
+        info!("Connecting to Radarr at {}", base_path);
+
         // Build the API config
         let config = Configuration {
             base_path,
@@ -65,8 +91,17 @@ impl Radarr {
         // Grab the additional details and use the config data to filter
 
         // First query the things we have to check (this will fail if we can't connect to the server anyway)
-        let mut rootfolders = api_v3_rootfolder_get(&config).await?;
-        let mut quality_profiles = api_v3_qualityprofile_get(&config).await?;
+        let mut rootfolders = api_v3_rootfolder_get(&config).await.map_err(|e| {
+            log_api_error(&e, "Failed to get root folders from Radarr");
+            e
+        })?;
+        trace!("Retrieved {} root folders", rootfolders.len());
+
+        let mut quality_profiles = api_v3_qualityprofile_get(&config).await.map_err(|e| {
+            log_api_error(&e, "Failed to get quality profiles from Radarr");
+            e
+        })?;
+        trace!("Retrieved {} quality profiles", quality_profiles.len());
 
         // Select rootfolder if given
         if let Some(rf) = rootfolder {
@@ -360,7 +395,14 @@ impl MediaItem for MovieResource {
 #[async_trait]
 impl MediaBackend for Radarr {
     async fn search(&self, term: &str) -> Result<Vec<Box<dyn MediaItem>>> {
-        let results = api_v3_movie_lookup_get(&self.config, Some(term)).await?;
+        info!("Searching Radarr for movie: {}", term);
+        let results = api_v3_movie_lookup_get(&self.config, Some(term))
+            .await
+            .map_err(|e| {
+                log_api_error(&e, "Failed to search Radarr");
+                e
+            })?;
+        debug!("Found {} movie results", results.len());
         Ok(results
             .into_iter()
             .map(|m| Box::new(m) as Box<dyn MediaItem>)
@@ -411,19 +453,42 @@ impl MediaBackend for Radarr {
         }));
         media.quality_profile_id = Some(selected.quality_profile_id);
         media.minimum_availability = Some(selected.minimum_availability);
-        media.root_folder_path = Some(Some(selected.rootfolder_path));
+        media.root_folder_path = Some(Some(selected.rootfolder_path.clone()));
 
         if selected.monitor != MonitorTypes::None {
             media.monitored = Some(true);
         }
 
+        info!(
+            "Requesting movie: {} (tmdb_id: {:?})",
+            media.title.clone().flatten().unwrap_or_default(),
+            media.tmdb_id
+        );
+        debug!(
+            "Request details - rootfolder: {}, quality_profile_id: {}, monitor: {:?}, minimum_availability: {:?}",
+            selected.rootfolder_path,
+            selected.quality_profile_id,
+            selected.monitor,
+            selected.minimum_availability
+        );
+        trace!("Full media object: {:#?}", media);
+
         // Make the API call
-        api_v3_movie_post(&self.config, Some(media)).await?;
+        api_v3_movie_post(&self.config, Some(media))
+            .await
+            .map_err(|e| {
+                log_api_error(&e, "Failed to add movie to Radarr");
+                e
+            })?;
 
         Ok(())
     }
 
-    fn success_message(&self, media: &dyn MediaItem) -> SuccessMessage {
+    fn success_message(
+        &self,
+        _details: &[RequestDetails],
+        media: &dyn MediaItem,
+    ) -> SuccessMessage {
         let media = media
             .as_any()
             .downcast_ref::<MovieResource>()

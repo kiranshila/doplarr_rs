@@ -4,7 +4,7 @@ use crate::providers::{
 use anyhow::Context;
 use std::{sync::Arc, time::Duration};
 use tokio::{sync::mpsc::Receiver, time::timeout};
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, info, trace};
 use twilight_http::Client as HttpClient;
 use twilight_model::{
     application::{
@@ -34,7 +34,10 @@ use uuid::Uuid;
 pub const TOP_LEVEL_COMMAND_NAME: &str = "request";
 pub const QUERY_COMMAND_NAME: &str = "query";
 pub const TIMEOUT_MESSAGE: &str = "Interaction timed out, please try again";
-pub const EARLY_STOP_MESSAGE: &str = "Selection has already been requested";
+pub const EARLY_STOP_MESSAGE: &str = "Already requested - nothing more to add";
+
+/// Discord's maximum number of options in a dropdown menu
+pub const MAX_DROPDOWN_OPTIONS: usize = 25;
 
 const ACCENT_COLOR: u32 = 0x7289DA;
 
@@ -311,7 +314,6 @@ fn build_completion_component(message: &SuccessMessage) -> Component {
     ContainerBuilder::new()
         .accent_color(Some(ACCENT_COLOR))
         .component(TextDisplayBuilder::new("# Request Submitted").build())
-        .component(SeparatorBuilder::new().build())
         .component(TextDisplayBuilder::new(&message.description).build())
         .build()
         .into()
@@ -400,7 +402,7 @@ pub async fn run_interaction(
 
     // Check if there were no results
     if results.is_empty() {
-        warn!("No search results found");
+        info!("No search results found");
         update_string_message("No results", &discord_http, application_id, &token).await?;
         return Ok(());
     }
@@ -433,7 +435,7 @@ pub async fn run_interaction(
         Ok(Some(val)) => val,
         Ok(None) => anyhow::bail!("Channel closed unexpectedly"),
         Err(_) => {
-            warn!("User selection timed out");
+            info!("User selection timed out");
             update_timeout(&discord_http, application_id, &token).await?;
             anyhow::bail!("Timed out waiting for user selection");
         }
@@ -455,7 +457,7 @@ pub async fn run_interaction(
 
     // Now check the early stop critera
     if backend.early_stop(&*selection) {
-        warn!("Stopping early");
+        info!("Stopping early - media already requested");
         update_string_message(EARLY_STOP_MESSAGE, &discord_http, application_id, &token).await?;
         return Ok(());
     }
@@ -499,7 +501,7 @@ pub async fn run_interaction(
             Ok(Some(val)) => val,
             Ok(None) => anyhow::bail!("Channel closed unexpectedly"),
             Err(_) => {
-                warn!("User selection timed out");
+                info!("User selection timed out");
                 update_timeout(&discord_http, application_id, &next.token).await?;
                 anyhow::bail!("Timed out waiting for user selection");
             }
@@ -582,7 +584,7 @@ pub async fn run_interaction(
     trace!(options = ?additional_details, "Collected options");
 
     // Perform the actual request
-    let success_msg = backend.success_message(&*selection);
+    let success_msg = backend.success_message(&additional_details, &*selection);
     backend.request(additional_details, selection).await?;
     info!("Request completed successfully");
 

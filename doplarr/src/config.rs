@@ -35,6 +35,8 @@ pub enum SeriesBackend {
         rootfolder: Option<String>,
         series_type: Option<SeriesTypes>,
         season_folders: Option<bool>,
+        /// Restrict which monitor types users can select (e.g., to prevent "All")
+        allowed_monitor_types: Option<Vec<SonarrMonitor>>,
     },
 }
 

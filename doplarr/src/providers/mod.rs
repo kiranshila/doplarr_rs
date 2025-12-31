@@ -93,9 +93,12 @@ pub trait MediaBackend: Send + Sync {
     /// from the media search result and the additional details
     async fn request(&self, details: Vec<RequestDetails>, media: Box<dyn MediaItem>) -> Result<()>;
 
-    /// Build the success message
-    fn success_message(&self, media: &dyn MediaItem) -> SuccessMessage;
+    /// Build the success message including details about what was requested
+    fn success_message(&self, details: &[RequestDetails], media: &dyn MediaItem) -> SuccessMessage;
 }
+
+// Shared utilities
+mod api_logging;
 
 // Now pull in the backends we've defined
 pub mod radarr;

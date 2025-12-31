@@ -8,4 +8,5 @@ extern crate serde_repr;
 extern crate url;
 
 pub mod apis;
+pub mod commands;
 pub mod models;

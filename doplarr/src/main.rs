@@ -157,7 +157,7 @@ async fn main() -> anyhow::Result<()> {
     {
         // Make sure we have a good event
         let Ok(event) = item else {
-            tracing::warn!(source = ?item.unwrap_err(), "Error receiving event");
+            error!(source = ?item.unwrap_err(), "Error receiving event");
             continue;
         };
 
