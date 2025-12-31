@@ -99,15 +99,13 @@ impl Sonarr {
         // Grab the additional details and use the config data to filter
 
         // First query the things we have to check (this will fail if we can't connect to the server anyway)
-        let mut rootfolders = api_v3_rootfolder_get(&config).await.map_err(|e| {
-            log_api_error(&e, "Failed to get root folders from Sonarr");
-            e
+        let mut rootfolders = api_v3_rootfolder_get(&config).await.inspect_err(|e| {
+            log_api_error(e, "Failed to get root folders from Sonarr");
         })?;
         trace!("Retrieved {} root folders", rootfolders.len());
 
-        let mut quality_profiles = api_v3_qualityprofile_get(&config).await.map_err(|e| {
-            log_api_error(&e, "Failed to get quality profiles from Sonarr");
-            e
+        let mut quality_profiles = api_v3_qualityprofile_get(&config).await.inspect_err(|e| {
+            log_api_error(e, "Failed to get quality profiles from Sonarr");
         })?;
         trace!("Retrieved {} quality profiles", quality_profiles.len());
 
@@ -478,9 +476,8 @@ impl MediaBackend for Sonarr {
         info!("Searching Sonarr for series: {}", term);
         let results = api_v3_series_lookup_get(&self.config, Some(term))
             .await
-            .map_err(|e| {
-                log_api_error(&e, "Failed to search Sonarr");
-                e
+            .inspect_err(|e| {
+                log_api_error(e, "Failed to search Sonarr");
             })?;
         debug!("Found {} series results", results.len());
         Ok(results
@@ -496,14 +493,14 @@ impl MediaBackend for Sonarr {
             .expect("Invalid media type for Sonarr");
 
         // Check if series exists and all seasons are already fully monitored
-        if let Some(id) = media.id {
-            if let Some(Some(ref seasons)) = media.seasons {
-                let all_monitored = seasons.iter().all(|s| s.monitored.unwrap_or(false));
+        if let Some(id) = media.id
+            && let Some(Some(ref seasons)) = media.seasons
+        {
+            let all_monitored = seasons.iter().all(|s| s.monitored.unwrap_or(false));
 
-                if all_monitored && !seasons.is_empty() {
-                    info!(series_id = id, "Series already fully monitored");
-                    return true;
-                }
+            if all_monitored && !seasons.is_empty() {
+                info!(series_id = id, "Series already fully monitored");
+                return true;
             }
         }
 
@@ -639,13 +636,11 @@ impl MediaBackend for Sonarr {
             debug!(season_number = season_number, "Adding season to monitoring");
 
             // Get the current series data
-            let mut existing_series =
-                api_v3_series_id_get(&self.config, id, None)
-                    .await
-                    .map_err(|e| {
-                        log_api_error(&e, "Failed to get existing series from Sonarr");
-                        e
-                    })?;
+            let mut existing_series = api_v3_series_id_get(&self.config, id, None)
+                .await
+                .inspect_err(|e| {
+                    log_api_error(e, "Failed to get existing series from Sonarr");
+                })?;
 
             debug!(
                 existing_quality_profile = ?existing_series.quality_profile_id,
@@ -684,9 +679,8 @@ impl MediaBackend for Sonarr {
             // PUT the updated series back
             api_v3_series_id_put(&self.config, &id.to_string(), None, Some(existing_series))
                 .await
-                .map_err(|e| {
-                    log_api_error(&e, "Failed to update series in Sonarr");
-                    e
+                .inspect_err(|e| {
+                    log_api_error(e, "Failed to update series in Sonarr");
                 })?;
 
             // Trigger a search for the newly monitored season
@@ -696,9 +690,8 @@ impl MediaBackend for Sonarr {
 
             let result = api_v3_command_post_custom(&self.config, &search_command)
                 .await
-                .map_err(|e| {
-                    log_api_error(&e, "Failed to trigger series search");
-                    e
+                .inspect_err(|e| {
+                    log_api_error(e, "Failed to trigger series search");
                 })?;
 
             info!(
@@ -752,9 +745,8 @@ impl MediaBackend for Sonarr {
 
             api_v3_series_post(&self.config, Some(media))
                 .await
-                .map_err(|e| {
-                    log_api_error(&e, "Failed to add series to Sonarr");
-                    e
+                .inspect_err(|e| {
+                    log_api_error(e, "Failed to add series to Sonarr");
                 })?;
         }
 

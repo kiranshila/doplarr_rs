@@ -91,15 +91,13 @@ impl Radarr {
         // Grab the additional details and use the config data to filter
 
         // First query the things we have to check (this will fail if we can't connect to the server anyway)
-        let mut rootfolders = api_v3_rootfolder_get(&config).await.map_err(|e| {
-            log_api_error(&e, "Failed to get root folders from Radarr");
-            e
+        let mut rootfolders = api_v3_rootfolder_get(&config).await.inspect_err(|e| {
+            log_api_error(e, "Failed to get root folders from Radarr");
         })?;
         trace!("Retrieved {} root folders", rootfolders.len());
 
-        let mut quality_profiles = api_v3_qualityprofile_get(&config).await.map_err(|e| {
-            log_api_error(&e, "Failed to get quality profiles from Radarr");
-            e
+        let mut quality_profiles = api_v3_qualityprofile_get(&config).await.inspect_err(|e| {
+            log_api_error(e, "Failed to get quality profiles from Radarr");
         })?;
         trace!("Retrieved {} quality profiles", quality_profiles.len());
 
@@ -398,9 +396,8 @@ impl MediaBackend for Radarr {
         info!("Searching Radarr for movie: {}", term);
         let results = api_v3_movie_lookup_get(&self.config, Some(term))
             .await
-            .map_err(|e| {
-                log_api_error(&e, "Failed to search Radarr");
-                e
+            .inspect_err(|e| {
+                log_api_error(e, "Failed to search Radarr");
             })?;
         debug!("Found {} movie results", results.len());
         Ok(results
@@ -476,9 +473,8 @@ impl MediaBackend for Radarr {
         // Make the API call
         api_v3_movie_post(&self.config, Some(media))
             .await
-            .map_err(|e| {
-                log_api_error(&e, "Failed to add movie to Radarr");
-                e
+            .inspect_err(|e| {
+                log_api_error(e, "Failed to add movie to Radarr");
             })?;
 
         Ok(())
