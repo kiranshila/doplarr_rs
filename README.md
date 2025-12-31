@@ -1,9 +1,15 @@
 <p align="center">
-  <img src="logos/logo-with-text.svg" alt="Doplarr" width="600">
+  <img src="logos/logo-with-text.svg" alt="Doplarr" width="480">
 </p>
 
-[![CI](https://github.com/kiranshila/doplarr_rs/actions/workflows/ci.yml/badge.svg)](https://github.com/kiranshila/doplarr_rs/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue)](LICENSE-MIT)
+<p align="center">
+  <a href="https://github.com/kiranshila/doplarr_rs/actions/workflows/ci.yml">
+    <img alt="CI" src="https://github.com/kiranshila/doplarr_rs/actions/workflows/ci.yml/badge.svg">
+  </a>
+  <a href="LICENSE-MIT">
+    <img alt="License" src="https://img.shields.io/badge/license-MIT%2FApache--2.0-blue">
+  </a>
+</p>
 
 A modern Discord bot for requesting media through \*arr backends, written in Rust.
 
