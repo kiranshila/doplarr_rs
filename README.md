@@ -30,7 +30,6 @@ This is a **complete rewrite** of the [original Doplarr](https://github.com/kira
 ## Screenshots
 
 <p align="center">
-  <img src="screenshots/slash.png" alt="Slash command interface" width="400">
   <img src="screenshots/series.png" alt="Series selection interface" width="400">
 </p>
 
