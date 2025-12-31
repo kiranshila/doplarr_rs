@@ -1,5 +1,9 @@
 # Doplarr
 
+<p align="center">
+  <img src="logos/logo.svg" alt="Doplarr Logo" width="200">
+</p>
+
 [![CI](https://github.com/kiranshila/doplarr_rs/actions/workflows/ci.yml/badge.svg)](https://github.com/kiranshila/doplarr_rs/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue)](LICENSE-MIT)
 
