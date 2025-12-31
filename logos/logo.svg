@@ -59,7 +59,7 @@
      inkscape:groupmode="layer"
      id="layer1">
     <circle
-       style="fill:#7289da;fill-opacity:1;stroke:none;stroke-width:0.262264;stroke-linecap:square;stroke-dasharray:1.5736, 0.262264"
+       style="fill:#ce4a28;fill-opacity:1;stroke:none;stroke-width:0.262264;stroke-linecap:square;stroke-dasharray:1.5736, 0.262264"
        id="path866"
        cx="50"
        cy="50"
@@ -85,7 +85,7 @@
     <g
        aria-label="λ"
        id="text24934"
-       style="font-size:47.894px;line-height:1.25;font-family:Impact;-inkscape-font-specification:Impact;fill:#7289da;stroke-width:1.19735">
+       style="font-size:47.894px;line-height:1.25;font-family:Impact;-inkscape-font-specification:Impact;fill:#ce4a28;stroke-width:1.19735">
       <path
          d="m 38.342206,68.802139 5.168249,-28.50722 q 0.3274,-1.824088 0.3274,-3.016761 0,-1.473302 -1.941017,-1.473302 h -1.26283 v -4.88762 h 5.752893 q 4.770692,0 6.852023,1.052359 2.081331,1.052358 2.806289,3.507861 0.748344,2.432117 1.356373,8.325324 l 1.870859,17.773165 q 0.140315,1.520073 0.420944,1.870859 0.304014,0.327401 0.724958,0.327401 0.350786,0 1.239444,-0.04677 v 5.027935 q -2.736132,0.3274 -5.402107,0.3274 -4.560219,0 -4.934391,-5.355335 L 50.035077,45.322854 46.924773,68.802139 Z"
          id="path2772" />
@@ -104,7 +104,7 @@
     <g
        aria-label="DOPLARR"
        id="text1822"
-       style="font-size:44.9694px;line-height:1.25;font-family:'Uni Sans';-inkscape-font-specification:'Uni Sans, Normal';fill:#7289da;stroke-width:1.12424">
+       style="font-size:44.9694px;line-height:1.25;font-family:'Uni Sans';-inkscape-font-specification:'Uni Sans, Normal';fill:#ce4a28;stroke-width:1.12424">
       <path
          d="m -47.853429,111.92688 v 31.83833 h 11.91689 c 6.385655,0.045 12.366585,-3.14785 12.366585,-10.47787 v -10.70271 c 0,-7.41995 -5.98093,-10.65775 -12.366585,-10.65775 z m 8.094491,24.28347 v -16.77358 h 4.092216 c 2.698164,0 4.002276,1.30411 4.002276,3.3727 v 9.93824 c 0,2.06859 -1.259143,3.46264 -4.002276,3.46264 z"
          id="path1995" />
