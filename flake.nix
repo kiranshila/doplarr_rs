@@ -100,12 +100,14 @@
             name = "ghcr.io/kiranshila/doplarr_rs";
             tag = "latest";
 
-            contents = [doplarr];
+            contents = [doplarr pkgs.cacert];
 
             config = {
               Cmd = ["${doplarr}/bin/doplarr"];
               ExposedPorts = {};
-              Env = [];
+              Env = [
+                "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+              ];
             };
           };
         };
