@@ -598,8 +598,8 @@ impl MediaBackend for Sonarr {
                         field_type: FieldType::Dropdown,
                     };
 
-                    // Insert season selector after root folder
-                    details.insert(1, season_details);
+                    // Insert season details at the end
+                    details.push(season_details);
                 }
             }
         }
