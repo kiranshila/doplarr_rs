@@ -363,6 +363,7 @@ async fn main() -> anyhow::Result<()> {
                     _ => {}
                 }
             }
+            Event::GatewayClose(_) => {} // Standard timeout, no need to log to debug or anything
             _ => debug!(event = ?event, "Got non-handled event"),
         }
     }
