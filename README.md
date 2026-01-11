@@ -316,9 +316,3 @@ at your option.
 
 - [Twilight](https://github.com/twilight-rs/twilight) for Discord API bindings
 - [OpenAPI Generator](https://github.com/OpenAPITools/openapi-generator) for *arr API clients
-
-## Support
-
-- **Issues**: [GitHub Issues](../../issues)
-- **Discussions**: [GitHub Discussions](../../discussions)
-- **Original Doplarr**: For questions about the Clojure version, see the [original repository](https://github.com/kiranshila/Doplarr)
