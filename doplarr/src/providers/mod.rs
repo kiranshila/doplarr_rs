@@ -9,6 +9,13 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::{any::Any, fmt::Debug};
 
+// Shared utilities
+mod api_logging;
+
+// Backend instances
+pub mod radarr;
+pub mod sonarr;
+
 /// Represents the different ways we can capture a unique id for a menu selection
 /// Some objects in the backends have unique integer ids, while some are just string sentinel values
 #[derive(Debug, Clone)]
@@ -96,10 +103,3 @@ pub trait MediaBackend: Send + Sync {
     /// Build the success message including details about what was requested
     fn success_message(&self, details: &[RequestDetails], media: &dyn MediaItem) -> SuccessMessage;
 }
-
-// Shared utilities
-mod api_logging;
-
-// Now pull in the backends we've defined
-pub mod radarr;
-pub mod sonarr;
