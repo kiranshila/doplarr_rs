@@ -21,6 +21,7 @@ This is a **complete rewrite** of the [original Doplarr](https://github.com/kira
 
 - **Modern Discord UI**: Built with Discord's V2 Components for a polished, native-looking interface
 - **Slash Commands**: Modern Discord interactions - no message content access needed
+- **Flexible Backend Configuration**: Define multiple slash commands per backend type - use different instances or the same instance with different settings (e.g., `/request movie` and `/request movie_4k` with separate quality profiles/root folders)
 - **No Privileged Intents Required**: Minimal permissions for maximum privacy
 - **Lightweight**: Minimal resource footprint with fast startup times
 - **Simple Configuration**: Single TOML config file with sensible defaults
@@ -40,6 +41,7 @@ If you're migrating from the Clojure version of Doplarr:
 | Feature | Original (Clojure) | This Version (Rust) |
 |---------|-------------------|---------------------|
 | **Discord UI** | V1 Components | V2 Components (richer layouts) |
+| **Backend Flexibility** | One instance per backend type | Multiple configurations per backend (e.g., `movie` + `movie_4k`) |
 | **Configuration** | EDN file or env vars | TOML with validation & helpful errors |
 | **Configuration Options** | Basic settings | More robust options (series type: Standard/Anime/Daily, monitor types, minimum availability, etc.) |
 | **Logging** | Basic logging | Structured logging with granular levels |
@@ -135,7 +137,7 @@ cargo build --release
 
 ## Configuration
 
-Create a `config.toml` file with your settings:
+Create a `config.toml` file with your settings. See [config.example.toml](config.example.toml) for a complete example.
 
 ```toml
 # Required: Your Discord bot token
@@ -151,56 +153,70 @@ log_level = "doplarr=info"
 # Note: Requires "Send Messages" permission in Discord when enabled
 public_followup = true
 
-# Configure Radarr for movie requests
-[movie_backend.Radarr]
+# ============================================================================
+# BACKENDS
+# ============================================================================
+# Each backend creates a slash command: /request <media>
+# You can define multiple backends of the same type with different settings.
+# The "media" field becomes the subcommand name (e.g., "movie" -> /request movie)
+
+# Standard movie requests
+[[backends]]
+media = "movie"
+
+[backends.config.Radarr]
 url = "http://localhost:7878"
 api_key = "your_radarr_api_key"
-
-# Optional: Override default quality profile
+# Optional settings - if omitted, users select at runtime
 quality_profile = "HD-1080p"
-
-# Optional: Override default root folder
 rootfolder = "/movies"
+monitor_type = "movieOnly"           # movieOnly, movieAndCollection, none
+minimum_availability = "announced"   # announced, inCinemas, released
 
-# Optional: Override default monitor type (movieOnly, movieAndCollection, none)
-monitor_type = "movieOnly"
+# 4K movie requests (same or different Radarr instance)
+[[backends]]
+media = "movie_4k"
 
-# Optional: Override minimum availability (announced, inCinemas, released)
-minimum_availability = "announced"
+[backends.config.Radarr]
+url = "http://localhost:7878"        # Can be same instance...
+api_key = "your_radarr_api_key"
+quality_profile = "Ultra-HD"         # ...with different quality profile
+rootfolder = "/movies/4k"            # ...and different root folder
 
-# Configure Sonarr for TV series requests
-[series_backend.Sonarr]
+# TV series requests
+[[backends]]
+media = "series"
+
+[backends.config.Sonarr]
 url = "http://localhost:8989"
 api_key = "your_sonarr_api_key"
-
-# Optional: Override default quality profile
 quality_profile = "WEB-1080p"
-
-# Optional: Override default root folder
 rootfolder = "/tv"
-
-# Optional: Use season folders (default: true)
 season_folders = true
-
-# Optional: Override default monitor type
-monitor_type = "all"
-
-# Optional: Override default series type (standard, daily, anime)
-series_type = "standard"
-
-# Optional: Restrict which monitor options users can select
-# Available: all, future, missing, existing, firstSeason, lastSeason,
-#            latestSeason, pilot, recent, monitorSpecials, unmonitorSpecials, none
+series_type = "standard"             # standard, daily, anime
+# Restrict which monitor options users can select
 allowed_monitor_types = ["firstSeason", "lastSeason", "latestSeason", "pilot", "recent"]
+
+# Anime requests (separate Sonarr instance or same with different settings)
+[[backends]]
+media = "anime"
+
+[backends.config.Sonarr]
+url = "http://localhost:8990"        # Could be separate Sonarr for anime
+api_key = "your_anime_sonarr_api_key"
+series_type = "anime"
+rootfolder = "/anime"
 ```
 
 ### Configuration Tips
 
-- **At least one backend required**: You must configure either `movie_backend` or `series_backend` (or both)
-- **Optional settings**: When optional settings (quality_profile, rootfolder, monitor_type, etc.) are not specified in the config, users will be able to select them at runtime through the Discord interface
+- **At least one backend required**: You must configure at least one `[[backends]]` entry
+- **Unique media names**: Each backend must have a unique `media` value (this becomes the slash command)
+- **Optional settings**: When optional settings (quality_profile, rootfolder, monitor_type, etc.) are not specified, users select them at runtime through the Discord interface
 - **Quality profiles**: Use the exact name as shown in Sonarr/Radarr settings
 - **Root folders**: Must be a path that exists in your *arr configuration
 - **Monitor types for Sonarr**: The `allowed_monitor_types` setting restricts user choices, preventing selections like "all" which might download too much
+- **Multiple configurations**: You can point multiple backends at the same *arr instance with different settings (e.g., different quality profiles for 4K vs standard)
 
 ## Running as a Service
 
@@ -277,7 +293,8 @@ Logs include:
 1. **TOML syntax**: Use a TOML validator if you get parse errors
 2. **Quality profiles**: Must match exactly (case-sensitive) what's in your *arr settings
 3. **Root folders**: Must be paths that exist in *arr configuration
-4. **Required fields**: `discord_token` and at least one backend are required
+4. **Required fields**: `discord_token` and at least one `[[backends]]` entry are required
+5. **Duplicate media names**: Each backend must have a unique `media` value
 
 ## Development
 

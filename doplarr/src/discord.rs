@@ -47,7 +47,7 @@ const ACCENT_COLOR: u32 = 0xCE4A28;
 const INTERACTION_TIMEOUT_DURATION: Duration = Duration::from_secs(300);
 
 /// Build the comand object, used to register with Discord what slash commands are available
-pub fn commands<T: AsRef<str>>(media_kinds: &[T]) -> Command {
+pub fn commands<T: AsRef<str>>(media_kinds: impl IntoIterator<Item = T>) -> Command {
     let query = StringBuilder::new(QUERY_COMMAND_NAME, "search query").required(true);
     let mut request_command = CommandBuilder::new(
         TOP_LEVEL_COMMAND_NAME,

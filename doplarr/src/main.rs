@@ -1,11 +1,17 @@
 use anyhow::bail;
 use clap::Parser;
-use config::{MovieBackend, SeriesBackend};
+use config::{Backend, BackendConfig};
 use discord::InteractionContinue;
 use providers::{MediaBackend, radarr::Radarr, sonarr::Sonarr};
-use std::{collections::HashMap, sync::Arc, time::Instant};
-use tokio::sync::{Mutex, mpsc};
-use tokio::time::{Duration, interval};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+    time::Instant,
+};
+use tokio::{
+    sync::{Mutex, mpsc},
+    time::{Duration, interval},
+};
 use tracing::{debug, error, info, trace, warn};
 use tracing_subscriber::EnvFilter;
 use twilight_cache_inmemory::{DefaultInMemoryCache, ResourceType};
@@ -59,33 +65,39 @@ async fn main() -> anyhow::Result<()> {
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(log_level));
     tracing_subscriber::fmt().with_env_filter(env_filter).init();
 
+    // Check that we have at least one backend client
+    if config.backends.is_empty() {
+        bail!("At least one media backend is required!");
+    }
+
+    // Check that all media types are unique
+    let mut media_types = HashSet::new();
+    if !config
+        .backends
+        .iter()
+        .all(|x| media_types.insert(x.media.as_str()))
+    {
+        bail!("There must only be one of each media type");
+    }
+
     // Build the HTTP request client for backend calls with a reasonable timeout
     let backend_http = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .connect_timeout(Duration::from_secs(10))
         .build()?;
 
-    // Connect to all available backends and cast into a trait object
-    // NOTE: You'd create other media type backend connections connections here
-    let movie_backend = match config.movie_backend {
-        Some(backend_config @ MovieBackend::Radarr { .. }) => {
-            let radarr = Radarr::connect(backend_config, backend_http.clone()).await?;
-            Some(Arc::new(radarr) as Arc<dyn MediaBackend>)
-        }
-        None => None,
-    };
-    let series_backend = match config.series_backend {
-        Some(backend_config @ SeriesBackend::Sonarr { .. }) => {
-            let sonarr = Sonarr::connect(backend_config, backend_http).await?;
-            Some(Arc::new(sonarr) as Arc<dyn MediaBackend>)
-        }
-        None => None,
-    };
-
-    // Check that we have at least one backend client
-    // NOTE: Check all backends here when new media types are added
-    if movie_backend.is_none() && series_backend.is_none() {
-        bail!("At least one media backend is required!");
+    // Connect to all available backends, cast into trait objects, and associate with their media types
+    let mut backends = HashMap::new();
+    for Backend { media, config } in &config.backends {
+        let backend: Arc<dyn MediaBackend> = match config {
+            BackendConfig::Radarr { .. } => {
+                Arc::new(Radarr::connect(config.clone(), backend_http.clone()).await?)
+            }
+            BackendConfig::Sonarr { .. } => {
+                Arc::new(Sonarr::connect(config.clone(), backend_http.clone()).await?)
+            }
+        };
+        backends.insert(media.as_str(), backend);
     }
 
     // We only need to listen for interactions (commands are registered via HTTP on READY)
@@ -101,15 +113,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     // Build the list of media types we'll register commands for
-    // NOTE: Add other media types here when needed
-    let mut command_list = vec![];
-    if movie_backend.is_some() {
-        command_list.push("movie");
-    }
-    if series_backend.is_some() {
-        command_list.push("series");
-    }
-    info!("Available backends: {:?}", command_list);
+    info!("Available backends: {:?}", media_types);
 
     // Cache interactions
     let cache = DefaultInMemoryCache::builder()
@@ -175,7 +179,7 @@ async fn main() -> anyhow::Result<()> {
                         let guilds = guilds_response.models().await.unwrap_or_default();
                         info!("Bot is in {} guild(s)", guilds.len());
 
-                        let command = discord::commands(&command_list);
+                        let command = discord::commands(media_types.iter().copied());
                         for guild in guilds {
                             info!(
                                 "Registering commands to guild: {} ({})",
@@ -191,7 +195,7 @@ async fn main() -> anyhow::Result<()> {
                             } else {
                                 info!(
                                     "Successfully registered {} subcommands to guild {}",
-                                    command_list.len(),
+                                    media_types.len(),
                                     guild.id
                                 );
                             }
@@ -258,14 +262,10 @@ async fn main() -> anyhow::Result<()> {
                             let discord_http = Arc::clone(&discord_http);
                             let in_progress = Arc::clone(&in_progress_interactions);
                             let public_followup = config.public_followup.unwrap_or(true);
-
-                            // NOTE: Add match statements here for new media type
-                            let backend = match media_kind.as_str() {
-                                "movie" => movie_backend.clone(),
-                                "series" => series_backend.clone(),
-                                _ => unreachable!(),
-                            }
-                            .expect("This will exist as we've checked earlier");
+                            let backend = backends
+                                .get(media_kind.as_str())
+                                .expect("This will exist as we've checked earlier")
+                                .clone();
 
                             async move {
                                 // Keep token for error handling

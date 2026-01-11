@@ -1,5 +1,5 @@
 use super::*;
-use crate::config::MovieBackend;
+use crate::config::BackendConfig;
 use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use radarr_api::{
@@ -176,9 +176,8 @@ impl Radarr {
         Ok(Self { config, details })
     }
 
-    #[allow(irrefutable_let_patterns)]
-    pub async fn connect(backend: MovieBackend, client: reqwest::Client) -> Result<Self> {
-        if let MovieBackend::Radarr {
+    pub async fn connect(backend: BackendConfig, client: reqwest::Client) -> Result<Self> {
+        if let BackendConfig::Radarr {
             url,
             api_key,
             monitor_type,

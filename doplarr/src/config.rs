@@ -9,12 +9,18 @@ pub struct Config {
     pub log_level: Option<String>,
     pub public_followup: Option<bool>,
     pub discord_token: String,
-    pub movie_backend: Option<MovieBackend>,
-    pub series_backend: Option<SeriesBackend>,
+    pub backends: Vec<Backend>,
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Clone)]
-pub enum MovieBackend {
+pub struct Backend {
+    pub media: String,
+    pub config: BackendConfig,
+}
+
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Clone)]
+/// All of the backend-specific configuration, passed to the backend constructors
+pub enum BackendConfig {
     Radarr {
         url: String,
         api_key: String,
@@ -23,10 +29,6 @@ pub enum MovieBackend {
         rootfolder: Option<String>,
         minimum_availability: Option<MovieStatusType>,
     },
-}
-
-#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Clone)]
-pub enum SeriesBackend {
     Sonarr {
         url: String,
         api_key: String,
@@ -64,7 +66,10 @@ mod tests {
             r#"
            discord_token = "abc123"
 
-           [movie_backend.Radarr]
+           [[backends]]
+           media = "movie"
+
+           [backends.config.Radarr]
            url = "http://1.2.3.4:7878"
            api_key = "abc123"
            monitor_type = "movieOnly"
@@ -76,15 +81,17 @@ mod tests {
 
         let expected = Config {
             discord_token: "abc123".to_string(),
-            movie_backend: Some(MovieBackend::Radarr {
-                url: "http://1.2.3.4:7878".to_string(),
-                api_key: "abc123".to_string(),
-                monitor_type: Some(RadarrMonitor::MovieOnly),
-                rootfolder: Some("/storage/movies".to_string()),
-                minimum_availability: Some(MovieStatusType::Announced),
-                quality_profile: None,
-            }),
-            series_backend: None,
+            backends: vec![Backend {
+                media: "movie".to_string(),
+                config: BackendConfig::Radarr {
+                    url: "http://1.2.3.4:7878".to_string(),
+                    api_key: "abc123".to_string(),
+                    monitor_type: Some(RadarrMonitor::MovieOnly),
+                    rootfolder: Some("/storage/movies".to_string()),
+                    minimum_availability: Some(MovieStatusType::Announced),
+                    quality_profile: None,
+                },
+            }],
             log_level: None,
             public_followup: None,
         };

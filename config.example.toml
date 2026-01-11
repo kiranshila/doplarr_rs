@@ -1,0 +1,144 @@
+# Doplarr Configuration Example
+# Copy this file to config.toml and update with your settings
+
+# ==============================================================================
+# REQUIRED SETTINGS
+# ==============================================================================
+
+# Your Discord bot token (from Discord Developer Portal)
+discord_token = "YOUR_DISCORD_BOT_TOKEN"
+
+# ==============================================================================
+# OPTIONAL GLOBAL SETTINGS
+# ==============================================================================
+
+# Logging level (default: "info")
+# Format: "target=level" or just "level"
+# Levels: error, warn, info, debug, trace
+# Examples:
+#   log_level = "info"
+#   log_level = "doplarr=debug"
+#   log_level = "doplarr=debug,twilight_gateway=warn"
+log_level = "info"
+
+# Make follow-up messages public (default: true)
+# When true, successful requests are announced in the channel
+# When false, all bot responses are ephemeral (only visible to requester)
+# Note: Requires "Send Messages" permission in Discord when enabled
+public_followup = true
+
+# ==============================================================================
+# BACKENDS
+# ==============================================================================
+# Each [[backends]] entry creates a Discord slash command: /request <media>
+#
+# Key concepts:
+# - "media" is the slash command name (must be unique)
+# - You can have multiple backends of the same type (Radarr/Sonarr)
+# - Backends can point to the same instance with different settings
+#
+# Examples:
+# - /request movie     -> Standard movies
+# - /request movie_4k  -> 4K movies (same or different Radarr)
+# - /request series    -> TV shows
+# - /request anime     -> Anime (separate Sonarr or same with different settings)
+
+# ------------------------------------------------------------------------------
+# RADARR BACKEND (Movies)
+# ------------------------------------------------------------------------------
+
+[[backends]]
+media = "movie"
+
+[backends.config.Radarr]
+url = "http://localhost:7878"
+api_key = "your_radarr_api_key"
+
+# All settings below are OPTIONAL
+# If omitted, users will select them at runtime via Discord UI
+
+# Quality profile name (must match exactly what's in Radarr)
+# quality_profile = "HD-1080p"
+
+# Root folder path (must exist in Radarr)
+# rootfolder = "/movies"
+
+# Monitor type: movieOnly, movieAndCollection, none
+# monitor_type = "movieOnly"
+
+# Minimum availability: tba, announced, inCinemas, released
+# minimum_availability = "announced"
+
+# ------------------------------------------------------------------------------
+# RADARR BACKEND - 4K Example (same instance, different settings)
+# ------------------------------------------------------------------------------
+# Uncomment this section to add a separate /request movie_4k command
+
+# [[backends]]
+# media = "movie_4k"
+#
+# [backends.config.Radarr]
+# url = "http://localhost:7878"           # Same Radarr instance
+# api_key = "your_radarr_api_key"
+# quality_profile = "Ultra-HD"            # Different quality profile
+# rootfolder = "/movies/4k"               # Different root folder
+# monitor_type = "movieOnly"
+# minimum_availability = "announced"
+
+# ------------------------------------------------------------------------------
+# SONARR BACKEND (TV Series)
+# ------------------------------------------------------------------------------
+
+[[backends]]
+media = "series"
+
+[backends.config.Sonarr]
+url = "http://localhost:8989"
+api_key = "your_sonarr_api_key"
+
+# All settings below are OPTIONAL
+# If omitted, users will select them at runtime via Discord UI
+
+# Quality profile name (must match exactly what's in Sonarr)
+# quality_profile = "WEB-1080p"
+
+# Root folder path (must exist in Sonarr)
+# rootfolder = "/tv"
+
+# Use season folders (default: user selects at runtime)
+# season_folders = true
+
+# Series type: standard, daily, anime
+# series_type = "standard"
+
+# Monitor type (if set, users cannot change):
+#   all, future, missing, existing, firstSeason, lastSeason,
+#   latestSeason, pilot, recent, monitorSpecials, unmonitorSpecials, none
+# monitor_type = "all"
+
+# Restrict which monitor options users can select (admin control)
+# If not set, all monitor types are available
+# This is useful to prevent users from selecting "all" which downloads everything
+allowed_monitor_types = [
+  "firstSeason",
+  "lastSeason",
+  "latestSeason",
+  "pilot",
+  "recent",
+]
+
+# ------------------------------------------------------------------------------
+# SONARR BACKEND - Anime Example (separate instance)
+# ------------------------------------------------------------------------------
+# Uncomment this section to add a separate /request anime command
+
+# [[backends]]
+# media = "anime"
+#
+# [backends.config.Sonarr]
+# url = "http://localhost:8990"           # Separate Sonarr instance for anime
+# api_key = "your_anime_sonarr_api_key"
+# quality_profile = "Anime"
+# rootfolder = "/anime"
+# series_type = "anime"
+# season_folders = true

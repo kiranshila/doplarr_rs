@@ -1,5 +1,5 @@
 use super::*;
-use crate::{config::SeriesBackend, discord::MAX_DROPDOWN_OPTIONS};
+use crate::{config::BackendConfig, discord::MAX_DROPDOWN_OPTIONS};
 use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use sonarr_api::{
@@ -192,8 +192,8 @@ impl Sonarr {
     }
 
     #[allow(irrefutable_let_patterns)]
-    pub async fn connect(backend: SeriesBackend, client: reqwest::Client) -> Result<Self> {
-        if let SeriesBackend::Sonarr {
+    pub async fn connect(backend: BackendConfig, client: reqwest::Client) -> Result<Self> {
+        if let BackendConfig::Sonarr {
             url,
             api_key,
             monitor_type,
