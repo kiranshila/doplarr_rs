@@ -34,8 +34,7 @@ Follow the other backends as an example, implementing the `MediaBackend` and `Me
 ### Add Config Settings
 
 In `doplarr/src/config.rs`, add the appropriate configuration settings for use in the config file.
-Add new media types as appropriate.
 
 ### Add Initialization
 
-In `doplarr/src/main.rs`, find the `NOTE:` lines and add appropriate logic to construct instances of the new backend type.
+In `doplarr/src/main.rs`, update the `let mut backends = HashMap::new() ...` section to match the new config type, mapping to your constructor.
