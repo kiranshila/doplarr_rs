@@ -13,7 +13,7 @@ A modern Discord bot for requesting media through \*arr backends, written in Rus
 ## Overview
 
 Doplarr is a Discord bot that allows users to request media from \*arr backends through slash commands.
-It integrates seamlessly with your *arr stack (Sonarr, Radarr) to automate media requests from Discord.
+It integrates seamlessly with your *arr stack (Sonarr, Radarr, Seerr) to automate media requests from Discord.
 
 This is a **complete rewrite** of the [original Doplarr](https://github.com/kiranshila/Doplarr) (written in Clojure) in Rust, offering improved performance, reduced resource usage, and easier deployment.
 
@@ -70,9 +70,9 @@ If you're migrating from the Clojure version of Doplarr:
      - Select bot permissions: `Send Messages` (required if `public_followup` is enabled)
    - Use the generated URL to invite the bot to your server
 
-2. **Sonarr and/or Radarr**
-   - At least one backend is required
-   - Get your API key from Settings → General → Security
+2. **At least one of: Sonarr, Radarr, or Seerr**
+   - Sonarr/Radarr: get your API key from Settings → General → Security
+   - Seerr: requires an **admin** API key (Settings → API Key); also requires the Discord notification agent to be enabled (Settings → Notifications → Discord) so that the Discord User ID field appears on user profiles
 
 ### Docker (Recommended)
 
@@ -207,6 +207,18 @@ url = "http://localhost:8990"        # Could be separate Sonarr for anime
 api_key = "your_anime_sonarr_api_key"
 series_type = "anime"
 rootfolder = "/anime"
+
+# Seerr — handles both movies and TV in a single entry.
+# Requires an admin API key and the Discord notification agent enabled in Seerr
+# (Settings → Notifications → Discord) so users can link their Discord User ID.
+[[backends]]
+media = "media"
+
+[backends.config.Seerr]
+url = "http://localhost:5055"
+api_key = "your_seerr_admin_api_key"
+# fallback_user_id = 1   # attribute unlinked users' requests here; omit to reject them
+# allow_4k = true        # show a Standard/4K quality choice (only if 4K servers configured)
 ```
 
 ### Configuration Tips
@@ -220,6 +232,9 @@ rootfolder = "/anime"
 - **Series type is never asked**: New series use the configured `series_type` if set; otherwise anime is auto-detected from the series' genres and everything else is added as standard
 - **Specials**: Season 0 is not offered when requesting seasons of existing series unless `allow_specials = true`
 - **Multiple configurations**: You can point multiple backends at the same *arr instance with different settings (e.g., different quality profiles for 4K vs standard)
+- **Seerr covers both movies and TV**: A single `[[backends]]` entry handles combined search; the `media` field is just the slash command label (e.g., `media = "media"`)
+- **Seerr user linking**: Users must set their Discord User ID in Seerr (Profile → Settings → Notifications → Discord) for requests to be attributed to them. The Discord notification agent must be enabled in Seerr settings for this field to appear. Use `fallback_user_id` to allow unlinked users
+- **Seerr 4K**: Set `allow_4k = true` only if your Seerr instance has 4K servers configured; defaults to false
 
 ## Running as a Service
 

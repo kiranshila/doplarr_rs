@@ -42,6 +42,16 @@ pub enum BackendConfig {
         /// Offer Season 0 (specials) when requesting seasons of existing series (default: false)
         allow_specials: Option<bool>,
     },
+    Seerr {
+        url: String,
+        /// Must be an admin API key (generated in Seerr under Settings → API Key)
+        api_key: String,
+        /// Attribute requests from unlinked Discord users to this Seerr user ID; if absent, unlinked users are rejected.
+        /// Users link by setting their Discord User ID in Seerr: Profile → Settings → Notifications → Discord
+        fallback_user_id: Option<i32>,
+        /// Present the "4K" quality option to users. Defaults to false.
+        allow_4k: Option<bool>,
+    },
 }
 
 impl Config {
@@ -92,6 +102,41 @@ mod tests {
                     rootfolder: Some("/storage/movies".to_string()),
                     minimum_availability: Some(MovieStatusType::Announced),
                     quality_profile: None,
+                },
+            }],
+            log_level: None,
+            public_followup: None,
+        };
+
+        assert_eq!(config, expected);
+    }
+
+    #[test]
+    fn test_parse_seerr_config() {
+        let config: Config = toml::from_str(
+            r#"
+           discord_token = "abc123"
+
+           [[backends]]
+           media = "media"
+
+           [backends.config.Seerr]
+           url = "http://1.2.3.4:5055"
+           api_key = "abc123"
+           fallback_user_id = 1
+        "#,
+        )
+        .unwrap();
+
+        let expected = Config {
+            discord_token: "abc123".to_string(),
+            backends: vec![Backend {
+                media: "media".to_string(),
+                config: BackendConfig::Seerr {
+                    url: "http://1.2.3.4:5055".to_string(),
+                    api_key: "abc123".to_string(),
+                    fallback_user_id: Some(1),
+                    allow_4k: None,
                 },
             }],
             log_level: None,

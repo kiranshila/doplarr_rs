@@ -267,14 +267,16 @@ impl From<Details> for Vec<RequestDetails> {
         let quality_profile_options = details
             .quality_profiles
             .iter()
-            .map(|x| DropdownOption {
-                title: x
-                    .name
-                    .clone()
-                    .flatten()
-                    .expect("Every quality profile should have a name"),
-                description: None,
-                id: x.id.map(SelectableId::Integer),
+            .filter_map(|x| {
+                let name = x.name.clone().flatten();
+                if name.is_none() {
+                    warn!("Skipping quality profile with no name (id: {:?})", x.id);
+                }
+                name.map(|n| DropdownOption {
+                    title: n,
+                    description: None,
+                    id: x.id.map(SelectableId::Integer),
+                })
             })
             .collect();
 
@@ -289,14 +291,16 @@ impl From<Details> for Vec<RequestDetails> {
         let rootfolder_options = details
             .rootfolders
             .iter()
-            .map(|x| DropdownOption {
-                title: x
-                    .path
-                    .clone()
-                    .flatten()
-                    .expect("Every root folder needs a path"),
-                description: None,
-                id: x.id.map(SelectableId::Integer),
+            .filter_map(|x| {
+                let path = x.path.clone().flatten();
+                if path.is_none() {
+                    warn!("Skipping root folder with no path (id: {:?})", x.id);
+                }
+                path.map(|p| DropdownOption {
+                    title: p,
+                    description: None,
+                    id: x.id.map(SelectableId::Integer),
+                })
             })
             .collect();
 
@@ -489,10 +493,10 @@ impl MediaBackend for Sonarr {
     }
 
     fn early_stop(&self, media: &dyn MediaItem) -> bool {
-        let media = media
-            .as_any()
-            .downcast_ref::<SeriesResource>()
-            .expect("Invalid media type for Sonarr");
+        let Some(media) = media.as_any().downcast_ref::<SeriesResource>() else {
+            error!("early_stop called with wrong media type for Sonarr backend");
+            return false;
+        };
 
         // Check if series exists and all requestable seasons are already monitored
         // (when specials are disabled, an unmonitored Season 0 doesn't count)
@@ -516,11 +520,15 @@ impl MediaBackend for Sonarr {
     }
 
     fn display_info(&self, media: &dyn MediaItem) -> MediaDisplayInfo {
-        let media = media
-            .as_any()
-            .downcast_ref::<SeriesResource>()
-            .context("Invalid media type for Sonarr")
-            .unwrap();
+        let Some(media) = media.as_any().downcast_ref::<SeriesResource>() else {
+            error!("display_info called with wrong media type for Sonarr backend");
+            return MediaDisplayInfo {
+                title: String::new(),
+                subtitle: None,
+                description: None,
+                thumbnail_url: None,
+            };
+        };
 
         MediaDisplayInfo {
             title: media.title.clone().flatten().unwrap_or_default(),
@@ -653,7 +661,12 @@ impl MediaBackend for Sonarr {
         Ok(details)
     }
 
-    async fn request(&self, details: Vec<RequestDetails>, media: Box<dyn MediaItem>) -> Result<()> {
+    async fn request(
+        &self,
+        details: Vec<RequestDetails>,
+        media: Box<dyn MediaItem>,
+        _requester_discord_id: u64,
+    ) -> Result<()> {
         let selected = SelectedDetails::try_from(details)?;
 
         // Downcast to concrete type
@@ -798,11 +811,14 @@ impl MediaBackend for Sonarr {
     }
 
     fn success_message(&self, details: &[RequestDetails], media: &dyn MediaItem) -> SuccessMessage {
-        let media = media
-            .as_any()
-            .downcast_ref::<SeriesResource>()
-            .context("Invalid media type for Sonarr")
-            .unwrap();
+        let Some(media) = media.as_any().downcast_ref::<SeriesResource>() else {
+            error!("success_message called with wrong media type for Sonarr backend");
+            return SuccessMessage {
+                summary: "Request submitted".into(),
+                description: "Will be downloaded when available.".into(),
+                thumbnail_url: None,
+            };
+        };
 
         let title = media.title.clone().flatten().unwrap_or_default();
         let year = media.year.unwrap_or_default();
@@ -827,11 +843,8 @@ impl MediaBackend for Sonarr {
         };
 
         SuccessMessage {
-            title: "Request Successful".to_string(),
             summary: format!("{title} ({year}){detail_text}"),
-            description: format!(
-                "{title} ({year}){detail_text} has been requested and will be downloaded when available.",
-            ),
+            description: "Will be downloaded when available.".to_string(),
             thumbnail_url: media.remote_poster.clone().flatten(),
         }
     }

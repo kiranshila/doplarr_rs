@@ -24,6 +24,12 @@ In some cases, manual edits to the generated files are required because the gene
 The rust compiler output is helpful here.
 In most cases, you can just remove the offending endpoints if they are unused.
 
+#### Hand-patches to `seerr_api` (do not overwrite on regen)
+
+- `seerr_api/src/models/_search_get_200_response_results_inner.rs`: `title` changed from `String` to `Option<String>` (with `skip_serializing_if`) and `new()` updated to match. The spec marks it required, but TV and person results use `name` instead; without this patch any mixed `/search` response fails to deserialize. Marked with `// HAND-PATCHED:` comment.
+- `seerr_api/src/models/tv_details.rs` and `movie_details.rs`: `watch_providers` changed from `Vec<Vec<WatchProvidersInner>>` to `Vec<WatchProvidersInner>`. The spec generates a doubly-nested type but the real API returns a flat array. Marked with `// HAND-PATCHED:` comment.
+- `seerr_api/src/apis/search_api.rs`: `search_get` embeds the `query` parameter directly in the URL using `percent-encoding` instead of reqwest's `.query()`. reqwest's `.query()` uses form-encoding (spaces → `+`) but Seerr requires percent-encoding (spaces → `%20`). Marked with `// HAND-PATCHED:` comment.
+
 Then, add that library to doplarr's Config.toml under backend APIs.
 
 ### Adding Implementations
@@ -39,22 +45,3 @@ In `doplarr/src/config.rs`, add the appropriate configuration settings for use i
 
 In `doplarr/src/main.rs`, update the `let mut backends = HashMap::new() ...` section to match the new config type, mapping to your constructor.
 
-## TODO: Message UX Pass
-
-The flow currently mixes Components V2 (ephemeral interactive messages) with a
-plain-content classic message for the public followup. The split is deliberate -
-V2 messages cannot carry `content`, and `content` is the only thing OS
-notification previews render - but the presentation deserves a dedicated pass:
-
-- Unify wording: ephemeral completion says "Request Submitted", the old public
-  message said "New Request", and `SuccessMessage::title` is ignored entirely
-- Terminal states (timeout, "No results", errors) are bare unstyled text while
-  the rest of the flow lives in an accent-colored container
-- The ephemeral completion message has the poster thumbnail available but
-  doesn't show it
-- The public followup is plain text only. An embed was tried and rejected: it
-  duplicated the content line, and tapping the poster thumbnail on iOS opened
-  the raw jpeg instead of a media viewer (Discord doesn't lightbox the skyhook
-  image URLs)
-- Best batched with the Seerr integration, which will reshape the request form
-  anyway (availability states, quotas, per-user requests)

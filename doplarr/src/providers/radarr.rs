@@ -245,14 +245,16 @@ impl From<Details> for Vec<RequestDetails> {
         let quality_profile_options = details
             .quality_profiles
             .iter()
-            .map(|x| DropdownOption {
-                title: x
-                    .name
-                    .clone()
-                    .flatten()
-                    .expect("Every quality profile should have a name"),
-                description: None,
-                id: x.id.map(SelectableId::Integer),
+            .filter_map(|x| {
+                let name = x.name.clone().flatten();
+                if name.is_none() {
+                    warn!("Skipping quality profile with no name (id: {:?})", x.id);
+                }
+                name.map(|n| DropdownOption {
+                    title: n,
+                    description: None,
+                    id: x.id.map(SelectableId::Integer),
+                })
             })
             .collect();
 
@@ -267,14 +269,16 @@ impl From<Details> for Vec<RequestDetails> {
         let rootfolder_options = details
             .rootfolders
             .iter()
-            .map(|x| DropdownOption {
-                title: x
-                    .path
-                    .clone()
-                    .flatten()
-                    .expect("Every root folder needs a path"),
-                description: None,
-                id: x.id.map(SelectableId::Integer),
+            .filter_map(|x| {
+                let path = x.path.clone().flatten();
+                if path.is_none() {
+                    warn!("Skipping root folder with no path (id: {:?})", x.id);
+                }
+                path.map(|p| DropdownOption {
+                    title: p,
+                    description: None,
+                    id: x.id.map(SelectableId::Integer),
+                })
             })
             .collect();
 
@@ -441,11 +445,15 @@ impl MediaBackend for Radarr {
     }
 
     fn display_info(&self, media: &dyn MediaItem) -> MediaDisplayInfo {
-        let media = media
-            .as_any()
-            .downcast_ref::<MovieResource>()
-            .context("Invalid media type for Radarr")
-            .unwrap();
+        let Some(media) = media.as_any().downcast_ref::<MovieResource>() else {
+            error!("display_info called with wrong media type for Radarr backend");
+            return MediaDisplayInfo {
+                title: String::new(),
+                subtitle: None,
+                description: None,
+                thumbnail_url: None,
+            };
+        };
 
         MediaDisplayInfo {
             title: media.title.clone().flatten().unwrap_or_default(),
@@ -459,7 +467,12 @@ impl MediaBackend for Radarr {
         Ok(self.details.clone().into())
     }
 
-    async fn request(&self, details: Vec<RequestDetails>, media: Box<dyn MediaItem>) -> Result<()> {
+    async fn request(
+        &self,
+        details: Vec<RequestDetails>,
+        media: Box<dyn MediaItem>,
+        _requester_discord_id: u64,
+    ) -> Result<()> {
         let selected = SelectedDetails::try_from(details)?;
 
         // Downcast to concrete type
@@ -510,20 +523,20 @@ impl MediaBackend for Radarr {
         _details: &[RequestDetails],
         media: &dyn MediaItem,
     ) -> SuccessMessage {
-        let media = media
-            .as_any()
-            .downcast_ref::<MovieResource>()
-            .context("Invalid media type for Radarr")
-            .unwrap();
+        let Some(media) = media.as_any().downcast_ref::<MovieResource>() else {
+            error!("success_message called with wrong media type for Radarr backend");
+            return SuccessMessage {
+                summary: "Request submitted".into(),
+                description: "Will be downloaded when available.".into(),
+                thumbnail_url: None,
+            };
+        };
 
         let title = media.title.clone().flatten().unwrap_or_default();
         let year = media.year.unwrap_or_default();
         SuccessMessage {
-            title: "Request Successful".to_string(),
             summary: format!("{title} ({year})"),
-            description: format!(
-                "{title} ({year}) has been requested and will be downloaded when available.",
-            ),
+            description: "Will be downloaded when available.".to_string(),
             thumbnail_url: media.remote_poster.clone().flatten(),
         }
     }

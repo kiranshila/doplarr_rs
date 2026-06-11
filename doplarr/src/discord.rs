@@ -44,6 +44,14 @@ const MAX_TEXT_CONTENT_LENGTH: usize = 4000;
 
 const ACCENT_COLOR: u32 = 0xCE4A28;
 
+fn escape_markdown(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('*', "\\*")
+        .replace('_', "\\_")
+        .replace('~', "\\~")
+        .replace('|', "\\|")
+}
+
 const INTERACTION_TIMEOUT_DURATION: Duration = Duration::from_secs(300);
 
 /// Truncate text to Discord's component text limit, respecting char boundaries
@@ -222,13 +230,12 @@ pub async fn update_string_message(
     application_id: Id<ApplicationMarker>,
     interaction_token: &str,
 ) -> anyhow::Result<()> {
-    update_interaction_component(
-        client,
-        application_id,
-        interaction_token,
-        TextDisplayBuilder::new(content).build().into(),
-    )
-    .await?;
+    let component = ContainerBuilder::new()
+        .accent_color(Some(ACCENT_COLOR))
+        .component(TextDisplayBuilder::new(content).build())
+        .build()
+        .into();
+    update_interaction_component(client, application_id, interaction_token, component).await?;
     Ok(())
 }
 
@@ -262,12 +269,15 @@ fn build_request_component(
             })
             .build(),
         )
-        .component(TextDisplayBuilder::new(format!("# {}", display_info.title)).build());
+        .component(
+            TextDisplayBuilder::new(format!("# {}", escape_markdown(&display_info.title))).build(),
+        );
 
         // Only add subtitle if it exists
         if let Some(subtitle) = &display_info.subtitle {
-            section =
-                section.component(TextDisplayBuilder::new(format!("-# {}", subtitle)).build());
+            section = section.component(
+                TextDisplayBuilder::new(format!("-# {}", escape_markdown(subtitle))).build(),
+            );
         }
 
         // Only add description if it exists, and truncate if needed
@@ -278,11 +288,13 @@ fn build_request_component(
 
         container = container.component(section.build());
     } else {
-        container = container
-            .component(TextDisplayBuilder::new(format!("# {}", display_info.title)).build());
+        container = container.component(
+            TextDisplayBuilder::new(format!("# {}", escape_markdown(&display_info.title))).build(),
+        );
         if let Some(subtitle) = &display_info.subtitle {
-            container =
-                container.component(TextDisplayBuilder::new(format!("-# {}", subtitle)).build());
+            container = container.component(
+                TextDisplayBuilder::new(format!("-# {}", escape_markdown(subtitle))).build(),
+            );
         }
         if let Some(description) = &display_info.description {
             container =
@@ -351,12 +363,32 @@ fn build_request_component(
 }
 
 fn build_completion_component(message: &SuccessMessage) -> Component {
-    ContainerBuilder::new()
-        .accent_color(Some(ACCENT_COLOR))
-        .component(TextDisplayBuilder::new("# Request Submitted").build())
-        .component(TextDisplayBuilder::new(&message.description).build())
-        .build()
-        .into()
+    let mut container = ContainerBuilder::new().accent_color(Some(ACCENT_COLOR));
+
+    let heading =
+        TextDisplayBuilder::new(format!("# {}", escape_markdown(&message.summary))).build();
+    let body = TextDisplayBuilder::new(&message.description).build();
+
+    if let Some(thumbnail_url) = &message.thumbnail_url {
+        let section = SectionBuilder::new(
+            ThumbnailBuilder::new(UnfurledMediaItem {
+                url: thumbnail_url.clone(),
+                proxy_url: None,
+                height: None,
+                width: None,
+                content_type: None,
+            })
+            .build(),
+        )
+        .component(heading)
+        .component(body)
+        .build();
+        container = container.component(section);
+    } else {
+        container = container.component(heading).component(body);
+    }
+
+    container.build().into()
 }
 
 #[derive(Debug)]
@@ -609,7 +641,9 @@ pub async fn run_interaction(
 
     // Perform the actual request
     let success_msg = backend.success_message(&additional_details, &*selection);
-    backend.request(additional_details, selection).await?;
+    backend
+        .request(additional_details, selection, user_id.get())
+        .await?;
     info!("Request completed successfully");
 
     // Update the message with success (using original token since we already responded to button click)
@@ -623,10 +657,13 @@ pub async fn run_interaction(
     .context("Failed to send success response")?;
 
     // Send public message to channel if configured
-    // Plain content only: it's the one thing OS notification previews render,
-    // and richer styling here needs a UX pass (see README_DEVELOPER TODO)
+    // Plain content only: it's the one thing OS notification previews render
     if public_followup {
-        let content = format!("{} requested by <@{}>", success_msg.summary, user_id);
+        let content = format!(
+            "{} requested by <@{}>",
+            escape_markdown(&success_msg.summary),
+            user_id
+        );
         let result = discord_http
             .create_message(channel_id)
             .content(&content)

@@ -2,7 +2,9 @@ use anyhow::bail;
 use clap::Parser;
 use config::{Backend, BackendConfig};
 use discord::InteractionContinue;
-use providers::{MediaBackend, radarr::Radarr, sonarr::Sonarr};
+use providers::{
+    MediaBackend, UserFacingError, radarr::Radarr, seerr::Seerr as SeerrBackend, sonarr::Sonarr,
+};
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -27,10 +29,13 @@ pub mod discord;
 pub mod providers;
 
 /// Sanitize error messages for Discord users while keeping full details in logs
-fn user_facing_error(err: &anyhow::Error) -> &'static str {
+fn user_facing_error(err: &anyhow::Error) -> String {
+    if let Some(e) = err.downcast_ref::<UserFacingError>() {
+        return e.0.clone();
+    }
+
     let err_msg = err.to_string().to_lowercase();
 
-    // Provide specific guidance for known error types
     if err_msg.contains("timeout") || err_msg.contains("timed out") {
         "Request timed out. The backend server may be slow or unavailable."
     } else if err_msg.contains("connection") || err_msg.contains("connect") {
@@ -44,9 +49,9 @@ fn user_facing_error(err: &anyhow::Error) -> &'static str {
     } else if err_msg.contains("500") || err_msg.contains("502") || err_msg.contains("503") {
         "The backend server encountered an error. Please try again later."
     } else {
-        // Generic message that doesn't leak any internal details
         "An error occurred while processing your request. Please try again or contact your administrator."
     }
+    .to_string()
 }
 
 type InteractionMap = Arc<Mutex<HashMap<uuid::Uuid, (mpsc::Sender<InteractionContinue>, Instant)>>>;
@@ -95,6 +100,9 @@ async fn main() -> anyhow::Result<()> {
             }
             BackendConfig::Sonarr { .. } => {
                 Arc::new(Sonarr::connect(config.clone(), backend_http.clone()).await?)
+            }
+            BackendConfig::Seerr { .. } => {
+                Arc::new(SeerrBackend::connect(config.clone(), backend_http.clone()).await?)
             }
         };
         backends.insert(media.as_str(), backend);
@@ -275,12 +283,12 @@ async fn main() -> anyhow::Result<()> {
 
                                 if let Err(e) = result {
                                     // Log full error details for admin debugging
-                                    error!(error = %e, "Failed to run coroutine to completion");
+                                    error!(error = ?e, "Failed to run coroutine to completion");
 
                                     // Show sanitized error to Discord user (no sensitive info)
                                     let user_msg = user_facing_error(&e);
                                     if let Err(update_err) = discord::update_string_message(
-                                        user_msg,
+                                        &user_msg,
                                         &discord_http,
                                         application_id,
                                         &interaction_token,

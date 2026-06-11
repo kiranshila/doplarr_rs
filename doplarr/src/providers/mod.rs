@@ -9,11 +9,23 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::{any::Any, fmt::Debug};
 
+#[derive(Debug)]
+pub struct UserFacingError(pub String);
+
+impl std::fmt::Display for UserFacingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for UserFacingError {}
+
 // Shared utilities
 mod api_logging;
 
 // Backend instances
 pub mod radarr;
+pub mod seerr;
 pub mod sonarr;
 
 /// Represents the different ways we can capture a unique id for a menu selection
@@ -70,9 +82,8 @@ pub struct MediaDisplayInfo {
 
 /// Represents the success block shown by discord
 pub struct SuccessMessage {
-    pub title: String,
     /// Short one-liner identifying what was requested, e.g. "Title (Year) (Season 2)"
-    /// Used as message content so OS notifications have something to show
+    /// Used as the heading and as OS notification content
     pub summary: String,
     pub description: String,
     pub thumbnail_url: Option<String>,
@@ -104,7 +115,12 @@ pub trait MediaBackend: Send + Sync {
 
     /// Perform the request with the backend, using the information gathered
     /// from the media search result and the additional details
-    async fn request(&self, details: Vec<RequestDetails>, media: Box<dyn MediaItem>) -> Result<()>;
+    async fn request(
+        &self,
+        details: Vec<RequestDetails>,
+        media: Box<dyn MediaItem>,
+        requester_discord_id: u64,
+    ) -> Result<()>;
 
     /// Build the success message including details about what was requested
     fn success_message(&self, details: &[RequestDetails], media: &dyn MediaItem) -> SuccessMessage;

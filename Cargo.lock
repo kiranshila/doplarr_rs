@@ -355,6 +355,7 @@ dependencies = [
  "clap",
  "radarr_api",
  "reqwest",
+ "seerr_api",
  "serde",
  "serde_json",
  "sonarr_api",
@@ -1650,6 +1651,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "seerr_api"
+version = "1.0.0"
+dependencies = [
+ "percent-encoding",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_repr",
+ "serde_with",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "semver"
 version = "1.0.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2398,6 +2413,7 @@ checksum = "144d6b123cef80b301b8f72a9e2ca4370ddec21950d0a103dd22c437006d2db7"
 dependencies = [
  "getrandom 0.4.2",
  "js-sys",
+ "serde_core",
  "wasm-bindgen",
 ]
 

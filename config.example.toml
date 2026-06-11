@@ -147,3 +147,28 @@ allowed_monitor_types = [
 # rootfolder = "/anime"
 # series_type = "anime"
 # season_folders = true
+
+# ------------------------------------------------------------------------------
+# SEERR BACKEND (Movies + TV)
+# ------------------------------------------------------------------------------
+# Seerr handles both movies and TV in a single backend entry.
+# Requires an admin API key (Settings → API Key in Seerr).
+#
+# Users are matched to their Seerr account via Discord User ID.
+# To link, users go to: Seerr Profile → Settings → Notifications → Discord
+# and enter their Discord User ID.
+
+# [[backends]]
+# media = "media"
+#
+# [backends.config.Seerr]
+# url = "http://localhost:5055"
+# api_key = "your_seerr_admin_api_key"
+#
+# # Optional: attribute requests from unlinked Discord users to this Seerr user ID.
+# # If absent, unlinked users are rejected with guidance on how to link their account.
+# # fallback_user_id = 1
+#
+# # Optional: present a "Standard / 4K" quality choice to users (default: false).
+# # Only enable if your Seerr instance has 4K servers configured.
+# # allow_4k = true
