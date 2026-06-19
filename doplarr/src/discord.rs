@@ -280,11 +280,12 @@ fn build_request_component(
             );
         }
 
-        // Only add description if it exists, and truncate if needed
-        if let Some(description) = &display_info.description {
-            section =
-                section.component(TextDisplayBuilder::new(truncate_text(description)).build());
-        }
+        let overview = display_info
+            .description
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .map_or("*Overview unavailable.*", |s| s);
+        section = section.component(TextDisplayBuilder::new(truncate_text(overview)).build());
 
         container = container.component(section.build());
     } else {
@@ -296,10 +297,13 @@ fn build_request_component(
                 TextDisplayBuilder::new(format!("-# {}", escape_markdown(subtitle))).build(),
             );
         }
-        if let Some(description) = &display_info.description {
-            container =
-                container.component(TextDisplayBuilder::new(truncate_text(description)).build());
-        }
+        let overview = display_info
+            .description
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .map_or("*Overview unavailable.*", |s| s);
+        container =
+            container.component(TextDisplayBuilder::new(truncate_text(overview)).build());
     }
 
     // Build the additional options
