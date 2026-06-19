@@ -29,6 +29,7 @@ In most cases, you can just remove the offending endpoints if they are unused.
 - `seerr_api/src/models/_search_get_200_response_results_inner.rs`: `title` changed from `String` to `Option<String>` (with `skip_serializing_if`) and `new()` updated to match. The spec marks it required, but TV and person results use `name` instead; without this patch any mixed `/search` response fails to deserialize. Marked with `// HAND-PATCHED:` comment.
 - `seerr_api/src/models/tv_details.rs` and `movie_details.rs`: `watch_providers` changed from `Vec<Vec<WatchProvidersInner>>` to `Vec<WatchProvidersInner>`. The spec generates a doubly-nested type but the real API returns a flat array. Marked with `// HAND-PATCHED:` comment.
 - `seerr_api/src/apis/search_api.rs`: `search_get` embeds the `query` parameter directly in the URL using `percent-encoding` instead of reqwest's `.query()`. reqwest's `.query()` uses form-encoding (spaces → `+`) but Seerr requires percent-encoding (spaces → `%20`). Marked with `// HAND-PATCHED:` comment.
+- `seerr_api/src/apis/request_api.rs`: `request_post` has an extra `x_api_user: Option<i32>` parameter that sends an `X-API-User` header. Seerr determines auto-approval from the authenticated caller (`req.user`), resolved via this header rather than the body's `userId` field. Without it, Seerr defaults to the admin and all requests are auto-approved. Documented with a `NOTE:` doc comment.
 
 Then, add that library to doplarr's Config.toml under backend APIs.
 

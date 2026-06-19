@@ -451,11 +451,13 @@ impl MediaBackend for Seerr {
         };
 
         let mut req = RequestPostRequest::new(media_type, result.id);
-        req.user_id = Some(Some(seerr_user_id as f64));
         req.is4k = Some(is_4k);
         req.seasons = seasons.map(Box::new);
 
-        tolerate_response_parse_error(request_post(&self.config, req).await, "Seerr request")?;
+        tolerate_response_parse_error(
+            request_post(&self.config, req, Some(seerr_user_id)).await,
+            "Seerr request",
+        )?;
         Ok(())
     }
 

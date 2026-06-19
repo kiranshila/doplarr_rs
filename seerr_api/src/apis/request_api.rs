@@ -203,9 +203,16 @@ pub async fn request_get(
 }
 
 /// Creates a new request with the provided media ID and type. The `REQUEST` permission is required.  If the user has the `ADMIN` or `AUTO_APPROVE` permissions, their request will be auomatically approved.
+///
+/// NOTE: `x_api_user` is a manual addition to this generated file. Seerr determines the
+/// authenticated caller — and therefore auto-approval — from `req.user`, which is resolved from
+/// the `X-API-User` header rather than the body's `userId` field. Without this header, Seerr
+/// defaults to the admin user and all requests are auto-approved regardless of the linked user's
+/// permissions.
 pub async fn request_post(
     configuration: &configuration::Configuration,
     request_post_request: models::RequestPostRequest,
+    x_api_user: Option<i32>,
 ) -> Result<models::MediaRequest, Error<RequestPostError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_body_request_post_request = request_post_request;
@@ -226,6 +233,9 @@ pub async fn request_post(
         };
         req_builder = req_builder.header("X-Api-Key", value);
     };
+    if let Some(user_id) = x_api_user {
+        req_builder = req_builder.header("X-API-User", user_id.to_string());
+    }
     req_builder = req_builder.json(&p_body_request_post_request);
 
     let req = req_builder.build()?;
