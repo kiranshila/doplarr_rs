@@ -302,8 +302,7 @@ fn build_request_component(
             .as_deref()
             .filter(|s| !s.is_empty())
             .map_or("*Overview unavailable.*", |s| s);
-        container =
-            container.component(TextDisplayBuilder::new(truncate_text(overview)).build());
+        container = container.component(TextDisplayBuilder::new(truncate_text(overview)).build());
     }
 
     // Build the additional options
