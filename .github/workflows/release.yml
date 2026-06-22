@@ -37,10 +37,10 @@ jobs:
               run: |
                   nix build .#dockerImage --print-build-logs
                   docker load < result
-                  docker tag ghcr.io/kiranshila/doplarr_rs:latest ghcr.io/kiranshila/doplarr_rs:${{ github.ref_name }}-amd64
+                  docker tag ghcr.io/activexray/doplarr_rs:latest ghcr.io/activexray/doplarr_rs:${{ github.ref_name }}-amd64
                   nix build .#dockerImageAarch64 --print-build-logs
                   docker load < result
-                  docker tag ghcr.io/kiranshila/doplarr_rs:latest ghcr.io/kiranshila/doplarr_rs:${{ github.ref_name }}-arm64
+                  docker tag ghcr.io/activexray/doplarr_rs:latest ghcr.io/activexray/doplarr_rs:${{ github.ref_name }}-arm64
 
             - name: Log in to GitHub Container Registry
               uses: docker/login-action@v3
@@ -51,13 +51,13 @@ jobs:
 
             - name: Push images and create multi-arch manifest
               run: |
-                  docker push ghcr.io/kiranshila/doplarr_rs:${{ github.ref_name }}-amd64
-                  docker push ghcr.io/kiranshila/doplarr_rs:${{ github.ref_name }}-arm64
+                  docker push ghcr.io/activexray/doplarr_rs:${{ github.ref_name }}-amd64
+                  docker push ghcr.io/activexray/doplarr_rs:${{ github.ref_name }}-arm64
                   docker buildx imagetools create \
-                    -t ghcr.io/kiranshila/doplarr_rs:${{ github.ref_name }} \
-                    -t ghcr.io/kiranshila/doplarr_rs:latest \
-                    ghcr.io/kiranshila/doplarr_rs:${{ github.ref_name }}-amd64 \
-                    ghcr.io/kiranshila/doplarr_rs:${{ github.ref_name }}-arm64
+                    -t ghcr.io/activexray/doplarr_rs:${{ github.ref_name }} \
+                    -t ghcr.io/activexray/doplarr_rs:latest \
+                    ghcr.io/activexray/doplarr_rs:${{ github.ref_name }}-amd64 \
+                    ghcr.io/activexray/doplarr_rs:${{ github.ref_name }}-arm64
 
             - name: Upload Linux binaries to release
               uses: softprops/action-gh-release@v2

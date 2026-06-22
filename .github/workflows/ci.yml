@@ -57,5 +57,5 @@ jobs:
 
             - name: Push Docker image
               run: |
-                  docker tag ghcr.io/kiranshila/doplarr_rs:latest ghcr.io/kiranshila/doplarr_rs:main
-                  docker push ghcr.io/kiranshila/doplarr_rs:main
+                  docker tag ghcr.io/activexray/doplarr_rs:latest ghcr.io/activexray/doplarr_rs:main
+                  docker push ghcr.io/activexray/doplarr_rs:main
