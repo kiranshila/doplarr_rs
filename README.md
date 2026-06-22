@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/kiranshila/doplarr_rs/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/kiranshila/doplarr_rs/ci.yml?style=for-the-badge"></a>
+  <a href="https://github.com/activexray/doplarr_rs/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/activexray/doplarr_rs/ci.yml?style=for-the-badge"></a>
   <a href="https://discord.gg/890634173751119882"><img alt="Discord" src="https://img.shields.io/discord/890634173751119882?color=ff69b4&label=discord&style=for-the-badge"></a>
   <a href="LICENSE-MIT"><img alt="License" src="https://img.shields.io/badge/license-MIT%2FApache--2.0-blue?style=for-the-badge"></a>
 </p>
@@ -43,7 +43,7 @@ docker run -d \
   --name doplarr \
   --restart unless-stopped \
   -v /path/to/config.toml:/config.toml:ro \
-  ghcr.io/kiranshila/doplarr_rs:latest
+  ghcr.io/activexray/doplarr_rs:latest
 ```
 
 Or with Docker Compose:
@@ -51,7 +51,7 @@ Or with Docker Compose:
 ```yaml
 services:
   doplarr:
-    image: ghcr.io/kiranshila/doplarr_rs:latest
+    image: ghcr.io/activexray/doplarr_rs:latest
     container_name: doplarr
     restart: unless-stopped
     volumes:
