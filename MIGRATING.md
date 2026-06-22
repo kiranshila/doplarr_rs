@@ -93,22 +93,12 @@ These have no equivalent in the Clojure version:
 
 You can also point multiple `[[backends]]` entries at the same Radarr or Sonarr instance with different settings to create separate commands — e.g. `/request movie` and `/request movie_4k` from one Radarr instance.
 
-## Docker image
-
-```
-# Old
-kiranshila/doplarr:latest
-
-# New
-ghcr.io/kiranshila/doplarr_rs:latest
-```
-
 The new image reads config from `/config.toml`. Update your volume mount:
 
 ```yaml
 services:
   doplarr:
-    image: ghcr.io/kiranshila/doplarr_rs:latest
+    image: ghcr.io/activexray/doplarr_rs:latest
     container_name: doplarr
     restart: unless-stopped
     volumes:

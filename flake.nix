@@ -147,7 +147,7 @@
             staticAarch64 = doplarrStaticAarch64;
 
             dockerImage = pkgs.dockerTools.buildLayeredImage {
-              name = "ghcr.io/kiranshila/doplarr_rs";
+              name = "ghcr.io/activexray/doplarr_rs";
               tag = "latest";
               contents = [doplarrStatic pkgs.cacert];
               config = {
@@ -160,7 +160,7 @@
             };
 
             dockerImageAarch64 = pkgs.dockerTools.buildLayeredImage {
-              name = "ghcr.io/kiranshila/doplarr_rs";
+              name = "ghcr.io/activexray/doplarr_rs";
               tag = "latest";
               architecture = "arm64";
               contents = [doplarrStaticAarch64 pkgs.cacert];
