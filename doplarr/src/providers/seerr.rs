@@ -400,7 +400,7 @@ impl MediaBackend for Seerr {
             .map(|s| {
                 let n = s.season_number.unwrap() as i32;
                 DropdownOption {
-                    title: format!("Season {n}"),
+                    title: n.to_string(),
                     description: None,
                     id: Some(SelectableId::Integer(n)),
                 }
