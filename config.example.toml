@@ -172,3 +172,23 @@ allowed_monitor_types = [
 # # Optional: present a "Standard / 4K" quality choice to users (default: false).
 # # Only enable if your Seerr instance has 4K servers configured.
 # # allow_4k = true
+#
+# # Optional: restrict search results to a single media kind ("movie" or "tv").
+# # When absent, both movies and TV shows are returned.
+# # Useful when configuring separate /request movie and /request series commands:
+#
+# [[backends]]
+# media = "movie"
+#
+# [backends.config.Seerr]
+# url = "http://localhost:5055"
+# api_key = "your_seerr_admin_api_key"
+# media_filter = "movie"
+#
+# [[backends]]
+# media = "series"
+#
+# [backends.config.Seerr]
+# url = "http://localhost:5055"
+# api_key = "your_seerr_admin_api_key"
+# media_filter = "tv"

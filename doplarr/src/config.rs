@@ -19,6 +19,13 @@ pub struct Backend {
 }
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum MediaKind {
+    Movie,
+    Tv,
+}
+
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Clone)]
 /// All of the backend-specific configuration, passed to the backend constructors
 pub enum BackendConfig {
     Radarr {
@@ -51,6 +58,9 @@ pub enum BackendConfig {
         fallback_user_id: Option<i32>,
         /// Present the "4K" quality option to users. Defaults to false.
         allow_4k: Option<bool>,
+        /// Restrict search results to a single media kind.
+        /// When absent, both movies and TV shows are returned.
+        media_filter: Option<MediaKind>,
     },
 }
 
@@ -137,6 +147,7 @@ mod tests {
                     api_key: "abc123".to_string(),
                     fallback_user_id: Some(1),
                     allow_4k: None,
+                    media_filter: None,
                 },
             }],
             log_level: None,

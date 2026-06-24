@@ -103,6 +103,13 @@ pub trait MediaBackend: Send + Sync {
     /// Given a search term, return a vector of things that can be converted into Discord's `SelectMenuOption`
     async fn search(&self, term: &str) -> Result<Vec<Box<dyn MediaItem>>>;
 
+    /// Convert search results into dropdown options for display.
+    /// Backends can override this to customize labels based on their own context
+    /// (e.g. suppressing the media-kind tag when results are already filtered).
+    fn to_dropdown_options(&self, results: &[Box<dyn MediaItem>]) -> Vec<DropdownOption> {
+        results.iter().map(|x| x.to_dropdown()).collect()
+    }
+
     /// Given a search results payload, determine if we should stop the interaction flow early
     /// Not all providers will be able to do this with the payload alone, but this needs to not require a backend request
     fn early_stop(&self, media: &dyn MediaItem) -> bool;

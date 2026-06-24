@@ -1,5 +1,5 @@
 use super::*;
-use crate::{config::BackendConfig, discord::MAX_DROPDOWN_OPTIONS};
+use crate::{config::{BackendConfig, MediaKind}, discord::MAX_DROPDOWN_OPTIONS};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use seerr_api::{
@@ -78,6 +78,7 @@ pub struct Seerr {
     config: Configuration,
     fallback_user_id: Option<i32>,
     allow_4k: bool,
+    media_filter: Option<MediaKind>,
     user_cache: RwLock<Option<UserMapCache>>,
 }
 
@@ -96,6 +97,7 @@ impl Seerr {
             api_key,
             fallback_user_id,
             allow_4k,
+            media_filter,
         } = backend
         else {
             bail!("Expected Seerr config");
@@ -119,6 +121,7 @@ impl Seerr {
             config,
             fallback_user_id,
             allow_4k: allow_4k.unwrap_or(false),
+            media_filter,
             user_cache: RwLock::new(None),
         })
     }
@@ -241,6 +244,41 @@ impl MediaItem for SeerrResult {
 
 #[async_trait]
 impl MediaBackend for Seerr {
+    fn to_dropdown_options(&self, results: &[Box<dyn MediaItem>]) -> Vec<DropdownOption> {
+        results
+            .iter()
+            .filter_map(|r| r.as_any().downcast_ref::<SeerrResult>())
+            .map(|result| {
+                let display_name = match result.media_type.as_str() {
+                    "tv" => result.name.as_deref().unwrap_or("Unknown"),
+                    _ => result.title.as_deref().unwrap_or("Unknown"),
+                };
+                let year = match result.media_type.as_str() {
+                    "tv" => result.first_air_date.as_deref().and_then(|d| d.get(..4)),
+                    _ => result.release_date.as_deref().and_then(|d| d.get(..4)),
+                };
+                let description = if self.media_filter.is_some() {
+                    year.map(str::to_string)
+                } else {
+                    let type_tag = match result.media_type.as_str() {
+                        "movie" => "Movie",
+                        "tv" => "Series",
+                        _ => &result.media_type,
+                    };
+                    Some(match year {
+                        Some(y) => format!("{type_tag} · {y}"),
+                        None => type_tag.to_string(),
+                    })
+                };
+                DropdownOption {
+                    title: display_name.to_string(),
+                    description,
+                    id: Some(SelectableId::Integer(result.id as i32)),
+                }
+            })
+            .collect()
+    }
+
     async fn search(&self, term: &str) -> Result<Vec<Box<dyn MediaItem>>> {
         let response = require(
             search_get(&self.config, term, None, None).await,
@@ -251,7 +289,11 @@ impl MediaBackend for Seerr {
             .results
             .unwrap_or_default()
             .into_iter()
-            .filter(|r| r.media_type == "movie" || r.media_type == "tv")
+            .filter(|r| match &self.media_filter {
+                Some(MediaKind::Movie) => r.media_type == "movie",
+                Some(MediaKind::Tv) => r.media_type == "tv",
+                None => r.media_type == "movie" || r.media_type == "tv",
+            })
             .map(|r| Box::new(r) as Box<dyn MediaItem>)
             .collect();
 

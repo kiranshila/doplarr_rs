@@ -1,5 +1,5 @@
 use crate::providers::{
-    DropdownOption, MediaBackend, MediaDisplayInfo, MediaItem, RequestDetails, SuccessMessage,
+    DropdownOption, MediaBackend, MediaDisplayInfo, RequestDetails, SuccessMessage,
 };
 use anyhow::Context;
 use std::{sync::Arc, time::Duration};
@@ -202,13 +202,11 @@ fn dropdown_options_to_select_menu<T: AsRef<str>>(
 /// Using the result payload from a search, create a dropdown that will select a search result
 pub async fn update_search_results_component(
     uuid: Uuid,
-    results: &[Box<dyn MediaItem>],
+    options: Vec<DropdownOption>,
     client: &Arc<HttpClient>,
     application_id: Id<ApplicationMarker>,
     interaction_token: &str,
 ) -> anyhow::Result<()> {
-    // Create the select menu option from the payload
-    let options = results.iter().map(|x| x.to_dropdown()).collect();
     let dropdown = dropdown_options_to_select_menu(options, "result", uuid, None, false);
 
     let component = ContainerBuilder::new()
@@ -463,9 +461,10 @@ pub async fn run_interaction(
 
     // Now update the interaction with all of the options that result from the search
     trace!("Showing search results to user");
+    let dropdown_options = backend.to_dropdown_options(results.as_slice());
     update_search_results_component(
         uuid,
-        results.as_slice(),
+        dropdown_options,
         &discord_http,
         application_id,
         &token,
