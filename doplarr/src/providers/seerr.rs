@@ -465,7 +465,7 @@ impl MediaBackend for Seerr {
         let is_4k = details
             .iter()
             .find(|d| d.metadata.as_deref() == Some("seerr:is_4k"))
-            .and_then(|d| d.options.first())
+            .and_then(|d| d.selected_option())
             .and_then(|o| match &o.id {
                 Some(SelectableId::Boolean(v)) => Some(*v),
                 _ => None,

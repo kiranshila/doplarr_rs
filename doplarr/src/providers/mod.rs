@@ -94,6 +94,22 @@ pub struct SuccessMessage {
     pub thumbnail_url: Option<String>,
 }
 
+impl RequestDetails {
+    /// Returns the currently selected option (for single-select fields).
+    pub fn selected_option(&self) -> Option<&DropdownOption> {
+        self.selected_indices
+            .first()
+            .and_then(|&i| self.options.get(i))
+    }
+
+    /// Returns all currently selected options (for multi-select fields).
+    pub fn selected_options(&self) -> impl Iterator<Item = &DropdownOption> {
+        self.selected_indices
+            .iter()
+            .filter_map(|&i| self.options.get(i))
+    }
+}
+
 // Trait that all media types must implement
 pub trait MediaItem: Send + Sync + Debug {
     fn to_dropdown(&self) -> DropdownOption;

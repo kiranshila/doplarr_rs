@@ -365,30 +365,30 @@ impl TryFrom<Vec<RequestDetails>> for SelectedDetails {
         let mut monitor = None;
         let mut minimum_availability = None;
 
-        for detail in details {
-            let Some(selection) = detail.options.into_iter().next() else {
+        for detail in &details {
+            let Some(selection) = detail.selected_option() else {
                 bail!("No option was selected for '{}'", detail.title);
             };
 
             match detail.metadata.as_deref() {
                 Some(field_keys::ROOT_FOLDER) => {
-                    root_folder_path = Some(selection.title);
+                    root_folder_path = Some(selection.title.clone());
                 }
                 Some(field_keys::QUALITY_PROFILE) => {
-                    quality_profile_id = match selection.id {
-                        Some(SelectableId::Integer(i)) => Some(i),
+                    quality_profile_id = match &selection.id {
+                        Some(SelectableId::Integer(i)) => Some(*i),
                         other => bail!("Quality profile must have an integer ID, got {other:?}"),
                     };
                 }
                 Some(field_keys::MONITOR) => {
-                    monitor = match selection.id {
-                        Some(SelectableId::String(s)) => Some(deserialize_from_string(&s)?),
+                    monitor = match &selection.id {
+                        Some(SelectableId::String(s)) => Some(deserialize_from_string(s)?),
                         other => bail!("Monitor must have a string ID, got {other:?}"),
                     };
                 }
                 Some(field_keys::AVAILABILITY) => {
-                    minimum_availability = match selection.id {
-                        Some(SelectableId::String(s)) => Some(deserialize_from_string(&s)?),
+                    minimum_availability = match &selection.id {
+                        Some(SelectableId::String(s)) => Some(deserialize_from_string(s)?),
                         other => bail!("Availability must have a string ID, got {other:?}"),
                     };
                 }

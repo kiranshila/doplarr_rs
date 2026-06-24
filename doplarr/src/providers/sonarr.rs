@@ -408,42 +408,42 @@ impl TryFrom<Vec<RequestDetails>> for SelectedDetails {
         let mut season_folder = None;
         let mut season_number = None;
 
-        for detail in details {
-            let Some(selection) = detail.options.into_iter().next() else {
+        for detail in &details {
+            let Some(selection) = detail.selected_option() else {
                 bail!("No option was selected for '{}'", detail.title);
             };
 
             match detail.metadata.as_deref() {
                 Some(field_keys::ROOT_FOLDER) => {
-                    root_folder_path = Some(selection.title);
+                    root_folder_path = Some(selection.title.clone());
                 }
                 Some(field_keys::QUALITY_PROFILE) => {
-                    quality_profile_id = match selection.id {
-                        Some(SelectableId::Integer(i)) => Some(i),
+                    quality_profile_id = match &selection.id {
+                        Some(SelectableId::Integer(i)) => Some(*i),
                         other => bail!("Quality profile must have an integer ID, got {other:?}"),
                     };
                 }
                 Some(field_keys::MONITOR) => {
-                    monitor = match selection.id {
-                        Some(SelectableId::String(s)) => Some(deserialize_from_string(&s)?),
+                    monitor = match &selection.id {
+                        Some(SelectableId::String(s)) => Some(deserialize_from_string(s)?),
                         other => bail!("Monitor must have a string ID, got {other:?}"),
                     };
                 }
                 Some(field_keys::SERIES_TYPE) => {
-                    series_type = match selection.id {
-                        Some(SelectableId::String(s)) => Some(deserialize_from_string(&s)?),
+                    series_type = match &selection.id {
+                        Some(SelectableId::String(s)) => Some(deserialize_from_string(s)?),
                         other => bail!("Series type must have a string ID, got {other:?}"),
                     };
                 }
                 Some(field_keys::SEASON_FOLDER) => {
-                    season_folder = match selection.id {
-                        Some(SelectableId::Boolean(b)) => Some(b),
+                    season_folder = match &selection.id {
+                        Some(SelectableId::Boolean(b)) => Some(*b),
                         other => bail!("Season folder must have a boolean ID, got {other:?}"),
                     };
                 }
                 Some(field_keys::SEASON) => {
-                    season_number = match selection.id {
-                        Some(SelectableId::Integer(i)) => Some(i),
+                    season_number = match &selection.id {
+                        Some(SelectableId::Integer(i)) => Some(*i),
                         other => bail!("Season must have an integer ID, got {other:?}"),
                     };
                 }
@@ -835,7 +835,7 @@ impl MediaBackend for Sonarr {
             details
                 .iter()
                 .find(|d| d.metadata.as_deref() == Some(field_keys::SEASON))
-                .and_then(|d| d.options.first())
+                .and_then(|d| d.selected_option())
                 .map(|opt| format!(" ({})", opt.title))
                 .unwrap_or_else(|| " (new season)".to_string())
         } else {
@@ -843,7 +843,7 @@ impl MediaBackend for Sonarr {
             details
                 .iter()
                 .find(|d| d.metadata.as_deref() == Some(field_keys::MONITOR))
-                .and_then(|d| d.options.first())
+                .and_then(|d| d.selected_option())
                 .map(|opt| format!(" ({})", opt.title))
                 .unwrap_or_default()
         };

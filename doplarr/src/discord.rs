@@ -174,9 +174,11 @@ pub async fn send_thinking(
 }
 
 /// Convert a vector of [DropdownOption] into a discord Select Menu, keyed by the vec index.
+/// `selected_indices` marks those options as default so Discord preserves the selection on re-render.
 /// When `max_values` is `Some(n)`, the menu allows selecting 1–n items (multi-select).
 fn dropdown_options_to_select_menu<T: AsRef<str>>(
     options: Vec<DropdownOption>,
+    selected_indices: &[usize],
     id: T,
     uuid: Uuid,
     placeholder: Option<String>,
@@ -195,7 +197,8 @@ fn dropdown_options_to_select_menu<T: AsRef<str>>(
     }
 
     for (i, option) in options.into_iter().enumerate() {
-        let mut menu_option = SelectMenuOptionBuilder::new(option.title, i.to_string());
+        let mut menu_option = SelectMenuOptionBuilder::new(option.title, i.to_string())
+            .default(selected_indices.contains(&i));
         if let Some(x) = option.description {
             menu_option = menu_option.description(x);
         }
@@ -213,7 +216,7 @@ pub async fn update_search_results_component(
     application_id: Id<ApplicationMarker>,
     interaction_token: &str,
 ) -> anyhow::Result<()> {
-    let dropdown = dropdown_options_to_select_menu(options, "result", uuid, None, false, None);
+    let dropdown = dropdown_options_to_select_menu(options, &[], "result", uuid, None, false, None);
 
     let component = ContainerBuilder::new()
         .accent_color(Some(ACCENT_COLOR))
@@ -326,63 +329,33 @@ fn build_request_component(
             continue;
         }
 
-        match detail.field_type {
-            FieldType::MultiSelect => {
-                if detail.selected_indices.is_empty() {
-                    selections_remaining = true;
-                }
-                let max = (detail.options.len() as u8).min(MAX_DROPDOWN_OPTIONS as u8);
-                let row = dropdown_options_to_select_menu(
-                    detail.options.clone(),
-                    detail.title.clone(),
-                    uuid,
-                    None,
-                    submitting,
-                    Some(max),
+        if detail.options.len() > 1 {
+            if detail.selected_indices.is_empty() {
+                selections_remaining = true;
+            }
+            let max_values = (detail.field_type == FieldType::MultiSelect)
+                .then(|| (detail.options.len() as u8).min(MAX_DROPDOWN_OPTIONS as u8));
+            let row = dropdown_options_to_select_menu(
+                detail.options.clone(),
+                &detail.selected_indices,
+                detail.title.clone(),
+                uuid,
+                None,
+                submitting,
+                max_values,
+            );
+            container = container
+                .component(SeparatorBuilder::new().build())
+                .component(TextDisplayBuilder::new(format!("### {}", detail.title)).build())
+                .component(row);
+        } else if detail.options.len() == 1 {
+            // Admin-configured single option — show as text, no user choice needed
+            let selection = detail.options.first().unwrap().title.clone();
+            container = container
+                .component(SeparatorBuilder::new().build())
+                .component(
+                    TextDisplayBuilder::new(format!("### {}\n{}", detail.title, selection)).build(),
                 );
-                container = container
-                    .component(SeparatorBuilder::new().build())
-                    .component(TextDisplayBuilder::new(format!("### {}", detail.title)).build())
-                    .component(row);
-                if !detail.selected_indices.is_empty() {
-                    let selected: String = detail
-                        .selected_indices
-                        .iter()
-                        .filter_map(|&i| detail.options.get(i))
-                        .map(|o| o.title.as_str())
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    container = container
-                        .component(TextDisplayBuilder::new(format!("-# {selected}")).build());
-                }
-            }
-            _ => {
-                if detail.options.len() > 1 {
-                    // User needs to choose - show dropdown
-                    selections_remaining = true;
-                    let row = dropdown_options_to_select_menu(
-                        detail.options.clone(),
-                        detail.title.clone(),
-                        uuid,
-                        None,
-                        submitting,
-                        None,
-                    );
-                    container = container
-                        .component(SeparatorBuilder::new().build())
-                        .component(TextDisplayBuilder::new(format!("### {}", detail.title)).build())
-                        .component(row);
-                } else if detail.options.len() == 1 {
-                    // User has selected - show as text for review
-                    let selection = detail.options.first().unwrap().title.clone();
-                    container = container
-                        .component(SeparatorBuilder::new().build())
-                        .component(
-                            TextDisplayBuilder::new(format!("### {}\n{}", detail.title, selection))
-                                .build(),
-                        );
-                }
-            }
         }
     }
 
@@ -635,18 +608,23 @@ pub async fn run_interaction(
                 debug!(detail = %title, count = indices.len(), "User updated multi-select");
                 additional_details[detail_idx].selected_indices = indices;
             } else {
-                let Some(option_idx) = next.data.values.first().and_then(|v| v.parse().ok()) else {
+                let Some(option_idx) = next
+                    .data
+                    .values
+                    .first()
+                    .and_then(|v| v.parse::<usize>().ok())
+                else {
                     break 'event Some("selection value is not a valid index");
                 };
-                if additional_details[detail_idx].options.len() <= 1 {
-                    break 'event Some("detail was already selected");
-                }
                 if option_idx >= additional_details[detail_idx].options.len() {
                     break 'event Some("selection index out of bounds");
                 }
-                let selected_option = additional_details[detail_idx].options.remove(option_idx);
-                debug!(detail = %title, selected = %selected_option.title, "User selected detail option");
-                additional_details[detail_idx].options = vec![selected_option];
+                debug!(
+                    detail = %title,
+                    selected = %additional_details[detail_idx].options[option_idx].title,
+                    "User selected detail option"
+                );
+                additional_details[detail_idx].selected_indices = vec![option_idx];
             }
             None
         };
@@ -683,10 +661,10 @@ pub async fn run_interaction(
         trace!("Updated component with selection");
 
         // Check if all details have been resolved
-        if additional_details.iter().all(|x| match x.field_type {
-            FieldType::MultiSelect => !x.selected_indices.is_empty(),
-            _ => x.options.len() == 1,
-        }) {
+        if additional_details
+            .iter()
+            .all(|x| x.options.len() == 1 || !x.selected_indices.is_empty())
+        {
             debug!("All details have been selected, waiting for final Request button click");
         }
     }
