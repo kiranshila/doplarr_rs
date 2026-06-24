@@ -1,5 +1,8 @@
 use super::*;
-use crate::{config::{BackendConfig, MediaKind}, discord::MAX_DROPDOWN_OPTIONS};
+use crate::{
+    config::{BackendConfig, MediaKind},
+    discord::MAX_DROPDOWN_OPTIONS,
+};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use seerr_api::{
