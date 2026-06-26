@@ -96,10 +96,17 @@ pub struct SuccessMessage {
 
 impl RequestDetails {
     /// Returns the currently selected option (for single-select fields).
+    ///
+    /// When only one option exists (admin-configured default), it is treated as
+    /// selected even if the user was not prompted to choose from a dropdown.
     pub fn selected_option(&self) -> Option<&DropdownOption> {
-        self.selected_indices
-            .first()
-            .and_then(|&i| self.options.get(i))
+        if let Some(&i) = self.selected_indices.first() {
+            return self.options.get(i);
+        }
+        if self.options.len() == 1 {
+            return self.options.first();
+        }
+        None
     }
 
     /// Returns all currently selected options (for multi-select fields).
@@ -152,4 +159,68 @@ pub trait MediaBackend: Send + Sync {
 
     /// Build the success message including details about what was requested
     fn success_message(&self, details: &[RequestDetails], media: &dyn MediaItem) -> SuccessMessage;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_option(title: &str) -> DropdownOption {
+        DropdownOption {
+            title: title.to_string(),
+            description: None,
+            id: None,
+        }
+    }
+
+    #[test]
+    fn selected_option_uses_explicit_selection() {
+        let detail = RequestDetails {
+            title: "Root Folder".to_string(),
+            options: vec![
+                sample_option("/movies"),
+                sample_option("/movies/4k"),
+            ],
+            selected_indices: vec![1],
+            metadata: None,
+            field_type: FieldType::Dropdown,
+            always_show: false,
+        };
+
+        assert_eq!(detail.selected_option().unwrap().title, "/movies/4k");
+    }
+
+    #[test]
+    fn selected_option_defaults_to_single_admin_configured_option() {
+        let detail = RequestDetails {
+            title: "Root Folder".to_string(),
+            options: vec![sample_option("/data/media/movies")],
+            selected_indices: vec![],
+            metadata: None,
+            field_type: FieldType::Dropdown,
+            always_show: false,
+        };
+
+        assert_eq!(
+            detail.selected_option().unwrap().title,
+            "/data/media/movies"
+        );
+    }
+
+    #[test]
+    fn selected_option_requires_selection_when_multiple_options() {
+        let detail = RequestDetails {
+            title: "Root Folder".to_string(),
+            options: vec![
+                sample_option("/movies"),
+                sample_option("/movies/4k"),
+            ],
+            selected_indices: vec![],
+            metadata: None,
+            field_type: FieldType::Dropdown,
+            always_show: false,
+        };
+
+        assert!(detail.selected_option().is_none());
+    }
 }
