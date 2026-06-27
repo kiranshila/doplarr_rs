@@ -288,8 +288,15 @@ async fn main() -> anyhow::Result<()> {
                                 };
 
                                 if let Err(e) = result {
-                                    // Log full error details for admin debugging
-                                    error!(error = ?e, "Failed to run coroutine to completion");
+                                    // A UserFacingError is an expected, user-actionable
+                                    // outcome (e.g. seasons already monitored), not a
+                                    // system failure - log it calmly. Everything else is
+                                    // a real error worth an admin's attention.
+                                    if e.downcast_ref::<UserFacingError>().is_some() {
+                                        info!(reason = %e, "Interaction ended with a user-facing message");
+                                    } else {
+                                        error!(error = ?e, "Failed to run coroutine to completion");
+                                    }
 
                                     // Show sanitized error to Discord user (no sensitive info)
                                     let user_msg = user_facing_error(&e);
