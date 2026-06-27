@@ -237,12 +237,8 @@ impl Sonarr {
             return None;
         }
 
-        // Most recent season first
-        seasons.sort_by(|a, b| {
-            b.season_number
-                .unwrap_or(0)
-                .cmp(&a.season_number.unwrap_or(0))
-        });
+        // Ascending season order (1, 2, 3, ...), matching the Seerr picker
+        seasons.sort_by_key(|s| s.season_number.unwrap_or(0));
 
         if seasons.len() > MAX_DROPDOWN_OPTIONS {
             debug!(
@@ -257,17 +253,18 @@ impl Sonarr {
             .take(MAX_DROPDOWN_OPTIONS)
             .map(|s| {
                 let n = s.season_number.unwrap_or(0);
-                let title = if n == 0 {
-                    "Season 0 (Specials)".to_string()
-                } else {
-                    format!("Season {n}")
-                };
-                let description = s
-                    .monitored
-                    .unwrap_or(false)
-                    .then(|| "Already monitored".to_string());
+                // Bare number as the label (matching the Seerr picker), with
+                // any status tags in the subtitle.
+                let mut tags = Vec::new();
+                if n == 0 {
+                    tags.push("Specials");
+                }
+                if s.monitored.unwrap_or(false) {
+                    tags.push("Already monitored");
+                }
+                let description = (!tags.is_empty()).then(|| tags.join(" · "));
                 DropdownOption {
-                    title,
+                    title: n.to_string(),
                     description,
                     id: Some(SelectableId::Integer(n)),
                 }
@@ -616,9 +613,9 @@ impl MediaBackend for Sonarr {
         // show every requestable season - including ones already monitored on
         // an existing series - and reject already-monitored picks at request
         // time rather than hiding them from the list.
-        let season_picker = self
-            .build_season_picker(media)
-            .context("Series has no requestable seasons")?;
+        let Some(season_picker) = self.build_season_picker(media) else {
+            bail!(UserFacingError("No requestable seasons found.".into()));
+        };
         details.push(season_picker);
 
         Ok(details)
