@@ -1,0 +1,100 @@
+name: 🐛 Bug Report
+description: Report a problem
+labels: ['bug', 'awaiting triage']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+
+        Please note that we use GitHub issues exclusively for bug reports and feature requests. For support questions, please use our other support channels to get help.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Please provide a clear and concise description of the bug or issue.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: What version of Doplarr are you running? (e.g. the Docker image tag, or the version printed in the startup logs.)
+    validations:
+      required: true
+  - type: textarea
+    id: repro-steps
+    attributes:
+      label: Steps to Reproduce
+      description: Please tell us how we can reproduce the undesired behavior.
+      placeholder: |
+        1. Run `/request ...`
+        2. Select [...]
+        3. Click [...]
+        4. See error [...]
+    validations:
+      required: true
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Backend
+      description: Which backend is involved? (Choose "Not backend-specific" if it isn't related to one.)
+      options:
+        - Radarr
+        - Sonarr
+        - Seerr
+        - Multiple
+        - Not backend-specific
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment Method
+      description: How are you running Doplarr?
+      options:
+        - Docker
+        - Nix
+        - Built from source (cargo)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Please copy and paste any relevant log output. Setting `log_level = "debug"` (or `trace`) in your config gives us the most to work with. (This will be automatically formatted into code, so no need for backticks.)
+      render: shell
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: If applicable, please provide screenshots depicting the problem (e.g. the Discord interaction).
+  - type: input
+    id: os
+    attributes:
+      label: Host Operating System
+      description: e.g., Ubuntu 24.04, Debian 12, NixOS, Windows 11 (Docker Desktop)
+    validations:
+      required: false
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Please provide any additional information that may be relevant or helpful.
+  - type: checkboxes
+    id: search-existing
+    attributes:
+      label: Search Existing Issues
+      description: Have you searched existing issues to see if this bug has already been reported?
+      options:
+        - label: Yes, I have searched existing issues.
+          required: true
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our [Code of Conduct](https://github.com/activexray/doplarr_rs/blob/main/CODE_OF_CONDUCT.md).
+      options:
+        - label: I agree to follow Doplarr's Code of Conduct.
+          required: true
