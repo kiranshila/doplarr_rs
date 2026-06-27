@@ -14,8 +14,8 @@ use sonarr_api::{
     },
     commands::SeasonSearchCommand,
     models::{
-        AddSeriesOptions, MonitorTypes, QualityProfileResource, RootFolderResource, SeriesResource,
-        SeriesTypes,
+        AddSeriesOptions, QualityProfileResource, RootFolderResource, SeasonResource,
+        SeriesResource, SeriesTypes,
     },
 };
 use tracing::{debug, error, info, trace, warn};
@@ -79,7 +79,6 @@ pub struct Sonarr {
 pub struct Details {
     rootfolders: Vec<RootFolderResource>,
     quality_profiles: Vec<QualityProfileResource>,
-    monitor: Vec<MonitorTypes>,
     /// Config-pinned series type; when unset, it's auto-detected per series
     series_type: Option<SeriesTypes>,
     season_folder: Option<bool>,
@@ -90,10 +89,10 @@ pub struct Details {
 pub struct SelectedDetails {
     pub rootfolder_path: Option<String>, // Only for new series - existing series inherit
     pub quality_profile_id: Option<i32>, // Only for new series
-    pub monitor: Option<MonitorTypes>,   // Only for new series
     pub series_type: Option<SeriesTypes>, // Only for new series
     pub season_folder: Option<bool>,     // Only for new series - existing series inherit
-    pub season_number: Option<i32>,      // Only for existing series - which season to monitor
+    /// Season numbers the user chose to monitor (both new and existing series)
+    pub season_numbers: Vec<i32>,
 }
 
 impl Sonarr {
@@ -102,12 +101,10 @@ impl Sonarr {
     pub async fn new(
         base_path: String,
         key: String,
-        monitor_type: Option<MonitorTypes>,
         quality_profile: Option<String>,
         rootfolder: Option<String>,
         series_type: Option<SeriesTypes>,
         season_folder: Option<bool>,
-        allowed_monitor_types: Option<Vec<MonitorTypes>>,
         allow_specials: bool,
         client: reqwest::Client,
     ) -> Result<Self> {
@@ -180,29 +177,10 @@ impl Sonarr {
             quality_profiles = vec![selected];
         }
 
-        let monitor = if let Some(x) = monitor_type {
-            vec![x]
-        } else if let Some(allowed) = allowed_monitor_types {
-            // Use admin-configured allowed monitor types
-            allowed
-        } else {
-            // Default user-facing options
-            vec![
-                MonitorTypes::All,
-                MonitorTypes::FirstSeason,
-                MonitorTypes::LastSeason,
-                MonitorTypes::LatestSeason,
-                MonitorTypes::Pilot,
-                MonitorTypes::Recent,
-                MonitorTypes::MonitorSpecials,
-            ]
-        };
-
         // Build the details
         let details = Details {
             rootfolders,
             quality_profiles,
-            monitor,
             series_type,
             season_folder,
         };
@@ -219,24 +197,20 @@ impl Sonarr {
         if let BackendConfig::Sonarr {
             url,
             api_key,
-            monitor_type,
             quality_profile,
             rootfolder,
             series_type,
             season_folders,
-            allowed_monitor_types,
             allow_specials,
         } = backend
         {
             Self::new(
                 url,
                 api_key,
-                monitor_type,
                 quality_profile,
                 rootfolder,
                 series_type,
                 season_folders,
-                allowed_monitor_types,
                 allow_specials.unwrap_or(false),
                 client,
             )
@@ -244,6 +218,70 @@ impl Sonarr {
         } else {
             bail!("Configured backend not for Sonarr");
         }
+    }
+
+    /// Builds the multi-select season picker, or `None` when the series exposes
+    /// no requestable seasons (after applying the specials filter). Already-
+    /// monitored seasons are shown but tagged, so users see the full list.
+    fn build_season_picker(&self, media: &SeriesResource) -> Option<RequestDetails> {
+        let Some(Some(seasons)) = &media.seasons else {
+            return None;
+        };
+
+        let mut seasons: Vec<&SeasonResource> = seasons
+            .iter()
+            .filter(|s| self.allow_specials || s.season_number.unwrap_or(0) != 0)
+            .collect();
+
+        if seasons.is_empty() {
+            return None;
+        }
+
+        // Most recent season first
+        seasons.sort_by(|a, b| {
+            b.season_number
+                .unwrap_or(0)
+                .cmp(&a.season_number.unwrap_or(0))
+        });
+
+        if seasons.len() > MAX_DROPDOWN_OPTIONS {
+            debug!(
+                total = seasons.len(),
+                showing = MAX_DROPDOWN_OPTIONS,
+                "Truncating season list to fit Discord dropdown limit"
+            );
+        }
+
+        let options: Vec<DropdownOption> = seasons
+            .into_iter()
+            .take(MAX_DROPDOWN_OPTIONS)
+            .map(|s| {
+                let n = s.season_number.unwrap_or(0);
+                let title = if n == 0 {
+                    "Season 0 (Specials)".to_string()
+                } else {
+                    format!("Season {n}")
+                };
+                let description = s
+                    .monitored
+                    .unwrap_or(false)
+                    .then(|| "Already monitored".to_string());
+                DropdownOption {
+                    title,
+                    description,
+                    id: Some(SelectableId::Integer(n)),
+                }
+            })
+            .collect();
+
+        Some(RequestDetails {
+            title: "Seasons".to_string(),
+            options,
+            metadata: Some(field_keys::SEASON.to_string()),
+            selected_indices: vec![],
+            field_type: FieldType::MultiSelect,
+            always_show: true,
+        })
     }
 }
 
@@ -253,9 +291,36 @@ fn deserialize_from_string<T: serde::de::DeserializeOwned>(s: &str) -> Result<T>
         .with_context(|| format!("Failed to deserialize enum variant: {}", s))
 }
 
+/// Returns the requested seasons that aren't already monitored on the series.
+/// An empty result means every requested season was already monitored.
+fn seasons_to_monitor(requested: &[i32], already_monitored: &[i32]) -> Vec<i32> {
+    requested
+        .iter()
+        .copied()
+        .filter(|n| !already_monitored.contains(n))
+        .collect()
+}
+
+/// Renders a list of season numbers for display, e.g. "Season 3" or
+/// "Seasons 1, 2, 3". Empty input yields an empty string.
+fn format_seasons(nums: &[i32]) -> String {
+    let mut nums = nums.to_vec();
+    nums.sort_unstable();
+    match nums.as_slice() {
+        [] => String::new(),
+        [n] => format!("Season {n}"),
+        _ => format!(
+            "Seasons {}",
+            nums.iter()
+                .map(|n| n.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    }
+}
+
 mod field_keys {
     pub const ROOT_FOLDER: &str = "sonarr:root_folder";
-    pub const MONITOR: &str = "sonarr:monitor";
     pub const SERIES_TYPE: &str = "sonarr:series_type";
     pub const QUALITY_PROFILE: &str = "sonarr:quality_profile";
     pub const SEASON_FOLDER: &str = "sonarr:season_folder";
@@ -314,44 +379,6 @@ impl From<Details> for Vec<RequestDetails> {
             always_show: false,
         };
 
-        let monitor_options = details
-            .monitor
-            .iter()
-            .map(|x| {
-                let title = match x {
-                    MonitorTypes::Unknown => "Unknown",
-                    MonitorTypes::All => "All",
-                    MonitorTypes::Future => "Future",
-                    MonitorTypes::Missing => "Missing",
-                    MonitorTypes::Existing => "Existing",
-                    MonitorTypes::FirstSeason => "First Season",
-                    MonitorTypes::LastSeason => "Last Season",
-                    MonitorTypes::LatestSeason => "Latest Season",
-                    MonitorTypes::Pilot => "Pilot",
-                    MonitorTypes::Recent => "Recent",
-                    MonitorTypes::MonitorSpecials => "Specials",
-                    MonitorTypes::UnmonitorSpecials => "Unmonitor Specials",
-                    MonitorTypes::None => "None",
-                    MonitorTypes::Skip => "Skip",
-                };
-
-                DropdownOption {
-                    title: title.to_string(),
-                    description: None,
-                    id: Some(SelectableId::String(x.to_string())),
-                }
-            })
-            .collect();
-
-        let monitor_details = RequestDetails {
-            title: "Monitor".to_string(),
-            options: monitor_options,
-            metadata: Some(field_keys::MONITOR.to_string()),
-            selected_indices: vec![],
-            field_type: FieldType::Dropdown,
-            always_show: false,
-        };
-
         // Season folder boolean option - show both if None, or just the config value if Some
         let season_folder_options = match details.season_folder {
             Some(value) => {
@@ -390,7 +417,6 @@ impl From<Details> for Vec<RequestDetails> {
 
         vec![
             rootfolder_details,
-            monitor_details,
             quality_profile_details,
             season_folder_details,
         ]
@@ -403,12 +429,22 @@ impl TryFrom<Vec<RequestDetails>> for SelectedDetails {
     fn try_from(details: Vec<RequestDetails>) -> Result<Self> {
         let mut root_folder_path = None;
         let mut quality_profile_id = None;
-        let mut monitor = None;
         let mut series_type = None;
         let mut season_folder = None;
-        let mut season_number = None;
+        let mut season_numbers = Vec::new();
 
         for detail in &details {
+            // The season picker is multi-select; collect every chosen season.
+            if detail.metadata.as_deref() == Some(field_keys::SEASON) {
+                for opt in detail.selected_options() {
+                    match &opt.id {
+                        Some(SelectableId::Integer(i)) => season_numbers.push(*i),
+                        other => bail!("Season must have an integer ID, got {other:?}"),
+                    }
+                }
+                continue;
+            }
+
             let Some(selection) = detail.selected_option() else {
                 bail!("No option was selected for '{}'", detail.title);
             };
@@ -423,12 +459,6 @@ impl TryFrom<Vec<RequestDetails>> for SelectedDetails {
                         other => bail!("Quality profile must have an integer ID, got {other:?}"),
                     };
                 }
-                Some(field_keys::MONITOR) => {
-                    monitor = match &selection.id {
-                        Some(SelectableId::String(s)) => Some(deserialize_from_string(s)?),
-                        other => bail!("Monitor must have a string ID, got {other:?}"),
-                    };
-                }
                 Some(field_keys::SERIES_TYPE) => {
                     series_type = match &selection.id {
                         Some(SelectableId::String(s)) => Some(deserialize_from_string(s)?),
@@ -441,12 +471,6 @@ impl TryFrom<Vec<RequestDetails>> for SelectedDetails {
                         other => bail!("Season folder must have a boolean ID, got {other:?}"),
                     };
                 }
-                Some(field_keys::SEASON) => {
-                    season_number = match &selection.id {
-                        Some(SelectableId::Integer(i)) => Some(*i),
-                        other => bail!("Season must have an integer ID, got {other:?}"),
-                    };
-                }
                 other => bail!("Unknown metadata key: {other:?}"),
             }
         }
@@ -454,10 +478,9 @@ impl TryFrom<Vec<RequestDetails>> for SelectedDetails {
         Ok(Self {
             rootfolder_path: root_folder_path, // Optional - only for new series
             quality_profile_id,                // Optional - only for new series
-            monitor,                           // Optional - only for new series
             series_type,                       // Optional - only for new series
             season_folder,                     // Optional - only for new series
-            season_number,                     // Optional - only for existing series
+            season_numbers,
         })
     }
 }
@@ -550,86 +573,11 @@ impl MediaBackend for Sonarr {
 
         let mut details: Vec<RequestDetails> = self.details.clone().into();
 
-        // If series already exists in Sonarr
         if media.id.is_some() {
-            debug!("Series already exists, showing only season selector");
-
-            // Filter out fields that should be inherited from existing series
-            details.retain(|d| {
-                !matches!(
-                    d.metadata.as_deref(),
-                    Some(field_keys::QUALITY_PROFILE)
-                        | Some(field_keys::SERIES_TYPE)
-                        | Some(field_keys::MONITOR)
-                        | Some(field_keys::ROOT_FOLDER)
-                        | Some(field_keys::SEASON_FOLDER)
-                )
-            });
-
-            // Add season selector showing only unmonitored seasons
-            // (Season 0 is only requestable when specials are enabled)
-            if let Some(Some(ref seasons)) = media.seasons {
-                let mut unmonitored_seasons: Vec<_> = seasons
-                    .iter()
-                    .filter(|s| !s.monitored.unwrap_or(false))
-                    .filter(|s| self.allow_specials || s.season_number.unwrap_or(0) != 0)
-                    .collect();
-
-                if !unmonitored_seasons.is_empty() {
-                    // Sort by season number descending (most recent first)
-                    unmonitored_seasons.sort_by(|a, b| {
-                        let a_num = a.season_number.unwrap_or(0);
-                        let b_num = b.season_number.unwrap_or(0);
-                        b_num.cmp(&a_num)
-                    });
-
-                    let total_unmonitored = unmonitored_seasons.len();
-                    if total_unmonitored > MAX_DROPDOWN_OPTIONS {
-                        debug!(
-                            total_unmonitored = total_unmonitored,
-                            showing = MAX_DROPDOWN_OPTIONS,
-                            "Series has more unmonitored seasons than Discord dropdown limit, showing most recent"
-                        );
-                    }
-
-                    let season_options: Vec<DropdownOption> = unmonitored_seasons
-                        .into_iter()
-                        .take(MAX_DROPDOWN_OPTIONS)
-                        .map(|s| {
-                            let season_num = s.season_number.unwrap_or(0);
-                            let title = if season_num == 0 {
-                                "Season 0 (Specials)".to_string()
-                            } else {
-                                format!("Season {}", season_num)
-                            };
-                            DropdownOption {
-                                title,
-                                description: None,
-                                id: Some(SelectableId::Integer(season_num)),
-                            }
-                        })
-                        .collect();
-
-                    let season_details = RequestDetails {
-                        title: "Season to Monitor".to_string(),
-                        options: season_options,
-                        metadata: Some(field_keys::SEASON.to_string()),
-                        selected_indices: vec![],
-                        field_type: FieldType::Dropdown,
-                        // Even a lone season should be reviewable before requesting
-                        always_show: true,
-                    };
-
-                    // Insert season details at the end
-                    details.push(season_details);
-                }
-            }
-
-            // Without a season to offer, the request flow has nothing to do
-            // (e.g. the lookup payload had no season data at all)
-            if details.is_empty() {
-                bail!("Series is already in Sonarr but has no seasons available to request");
-            }
+            // Existing series: every add-time setting is inherited, so the only
+            // thing to collect is which seasons to monitor.
+            debug!("Series already exists, showing only the season picker");
+            details.clear();
         } else {
             // New series: series type is Sonarr arcana most requesters won't
             // understand, so don't ask - use the config pin if present,
@@ -664,6 +612,15 @@ impl MediaBackend for Sonarr {
             });
         }
 
+        // Season picker (multi-select) for both new and existing series. We
+        // show every requestable season - including ones already monitored on
+        // an existing series - and reject already-monitored picks at request
+        // time rather than hiding them from the list.
+        let season_picker = self
+            .build_season_picker(media)
+            .context("Series has no requestable seasons")?;
+        details.push(season_picker);
+
         Ok(details)
     }
 
@@ -687,18 +644,13 @@ impl MediaBackend for Sonarr {
             media.tvdb_id
         );
 
-        // Check if series already exists in Sonarr (has an ID)
+        if selected.season_numbers.is_empty() {
+            bail!(UserFacingError("No seasons were selected.".into()));
+        }
+
+        // Existing series in Sonarr (has an ID)
         if let Some(id) = media.id {
-            info!(
-                series_id = id,
-                "Series already exists in Sonarr, adding season to monitoring"
-            );
-
-            let season_number = selected
-                .season_number
-                .context("No season was selected for an existing series")?;
-
-            debug!(season_number = season_number, "Adding season to monitoring");
+            info!(series_id = id, "Series already exists in Sonarr");
 
             // Get the current series data
             let mut existing_series = api_v3_series_id_get(&self.config, id, None)
@@ -707,67 +659,61 @@ impl MediaBackend for Sonarr {
                     log_api_error(e, "Failed to get existing series from Sonarr");
                 })?;
 
-            debug!(
-                existing_quality_profile = ?existing_series.quality_profile_id,
-                existing_series_type = ?existing_series.series_type,
-                "Preserving existing series settings"
-            );
+            // Skip seasons already monitored; error only if every pick is a dup
+            let already_monitored: Vec<i32> = existing_series
+                .seasons
+                .as_ref()
+                .and_then(|s| s.as_ref())
+                .map(|seasons| {
+                    seasons
+                        .iter()
+                        .filter(|s| s.monitored.unwrap_or(false))
+                        .filter_map(|s| s.season_number)
+                        .collect()
+                })
+                .unwrap_or_default();
 
-            // Find and monitor the selected season (additive only)
-            if let Some(Some(ref mut seasons)) = existing_series.seasons {
-                let season = seasons
-                    .iter_mut()
-                    .find(|s| s.season_number == Some(season_number));
-
-                match season {
-                    Some(season) => {
-                        season.monitored = Some(true);
-                        info!(
-                            season_number = season_number,
-                            "Season marked for monitoring"
-                        );
-                    }
-                    None => bail!("Season {} not found in series", season_number),
-                }
-            } else {
-                bail!(
-                    "Season {} not found in series (no seasons array)",
-                    season_number
-                );
+            let to_monitor = seasons_to_monitor(&selected.season_numbers, &already_monitored);
+            if to_monitor.is_empty() {
+                bail!(UserFacingError(format!(
+                    "{} already monitored.",
+                    format_seasons(&selected.season_numbers)
+                )));
             }
+            debug!(?to_monitor, "Adding seasons to monitoring");
 
-            // Update series monitored flag
+            // Mark the seasons monitored (additive only - never unmonitor)
+            let Some(Some(seasons)) = existing_series.seasons.as_mut() else {
+                bail!("Series has no seasons to update");
+            };
+            for n in &to_monitor {
+                match seasons.iter_mut().find(|s| s.season_number == Some(*n)) {
+                    Some(season) => season.monitored = Some(true),
+                    None => bail!("Season {n} not found in series"),
+                }
+            }
             existing_series.monitored = Some(true);
 
             trace!("Updated series object: {:#?}", existing_series);
 
-            // PUT the updated series back
             tolerate_response_parse_error(
                 api_v3_series_id_put(&self.config, &id.to_string(), None, Some(existing_series))
                     .await,
                 "Failed to update series in Sonarr",
             )?;
 
-            // Trigger a search scoped to the newly monitored season
-            info!("Triggering search for newly monitored season");
-            let search_command = SeasonSearchCommand::new(id, season_number);
-            trace!("Search command: {:?}", search_command);
-
-            let result = tolerate_response_parse_error(
-                api_v3_command_post_custom(&self.config, &search_command).await,
-                "Failed to trigger season search",
-            )?;
-
-            info!(
-                "Search command queued successfully, command_id: {:?}",
-                result.and_then(|r| r.id)
-            );
+            // Trigger a search scoped to each newly monitored season
+            for n in &to_monitor {
+                let search_command = SeasonSearchCommand::new(id, *n);
+                let result = tolerate_response_parse_error(
+                    api_v3_command_post_custom(&self.config, &search_command).await,
+                    "Failed to trigger season search",
+                )?;
+                info!(season = n, command_id = ?result.and_then(|r| r.id), "Season search queued");
+            }
         } else {
             info!("Series is new, adding to Sonarr");
 
-            let monitor = selected
-                .monitor
-                .context("No monitor type was selected for a new series")?;
             let rootfolder_path = selected
                 .rootfolder_path
                 .context("No root folder was selected for a new series")?;
@@ -782,26 +728,36 @@ impl MediaBackend for Sonarr {
                 .context("No series type was selected for a new series")?;
 
             debug!(
-                "Request details - rootfolder: {}, quality_profile_id: {:?}, monitor: {:?}, series_type: {:?}, season_folder: {}",
-                rootfolder_path, quality_profile_id, monitor, series_type, season_folder
+                "Request details - rootfolder: {}, quality_profile_id: {:?}, series_type: {:?}, season_folder: {}, seasons: {:?}",
+                rootfolder_path,
+                quality_profile_id,
+                series_type,
+                season_folder,
+                selected.season_numbers
             );
 
-            // Update the media object with the selected options
+            // Monitor exactly the requested seasons; everything else off. Like
+            // Seerr, the explicit season list drives monitoring rather than
+            // Sonarr's monitor-type enum.
+            if let Some(Some(seasons)) = media.seasons.as_mut() {
+                for season in seasons.iter_mut() {
+                    let requested = season
+                        .season_number
+                        .is_some_and(|n| selected.season_numbers.contains(&n));
+                    season.monitored = Some(requested);
+                }
+            }
+
             media.add_options = Some(Box::new(AddSeriesOptions {
-                ignore_episodes_with_files: Some(false),
+                ignore_episodes_with_files: Some(true),
                 ignore_episodes_without_files: Some(false),
-                monitor: Some(monitor),
+                monitor: None,
                 search_for_cutoff_unmet_episodes: Some(false),
                 search_for_missing_episodes: Some(true),
             }));
             media.root_folder_path = Some(Some(rootfolder_path));
             media.season_folder = Some(season_folder);
-
-            if monitor != MonitorTypes::None {
-                media.monitored = Some(true);
-            }
-
-            // Set quality profile and series type
+            media.monitored = Some(true);
             media.quality_profile_id = Some(quality_profile_id);
             media.series_type = Some(series_type);
 
@@ -829,23 +785,23 @@ impl MediaBackend for Sonarr {
         let title = media.title.clone().flatten().unwrap_or_default();
         let year = media.year.unwrap_or_default();
 
-        // Check if this was adding a season or creating a new series
-        let detail_text = if media.id.is_some() {
-            // Existing series - find which season was added
-            details
-                .iter()
-                .find(|d| d.metadata.as_deref() == Some(field_keys::SEASON))
-                .and_then(|d| d.selected_option())
-                .map(|opt| format!(" ({})", opt.title))
-                .unwrap_or_else(|| " (new season)".to_string())
-        } else {
-            // New series - find monitor type
-            details
-                .iter()
-                .find(|d| d.metadata.as_deref() == Some(field_keys::MONITOR))
-                .and_then(|d| d.selected_option())
-                .map(|opt| format!(" ({})", opt.title))
-                .unwrap_or_default()
+        // List the requested seasons, e.g. " (Seasons 1, 2, 3)"
+        let season_nums: Vec<i32> = details
+            .iter()
+            .find(|d| d.metadata.as_deref() == Some(field_keys::SEASON))
+            .map(|d| {
+                d.selected_options()
+                    .filter_map(|o| match &o.id {
+                        Some(SelectableId::Integer(n)) => Some(*n),
+                        _ => None,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let detail_text = match format_seasons(&season_nums) {
+            s if s.is_empty() => String::new(),
+            s => format!(" ({s})"),
         };
 
         SuccessMessage {
@@ -881,6 +837,26 @@ mod tests {
         }
     }
 
+    /// A multi-select season picker over the given season numbers, with the
+    /// options at `selected` indices chosen.
+    fn season_field(seasons: &[i32], selected: &[usize]) -> RequestDetails {
+        RequestDetails {
+            title: "Seasons".into(),
+            options: seasons
+                .iter()
+                .map(|n| DropdownOption {
+                    title: format!("Season {n}"),
+                    description: None,
+                    id: Some(SelectableId::Integer(*n)),
+                })
+                .collect(),
+            selected_indices: selected.to_vec(),
+            metadata: Some(field_keys::SEASON.to_string()),
+            field_type: FieldType::MultiSelect,
+            always_show: true,
+        }
+    }
+
     /// New-series flow: every field present and explicitly selected.
     fn full_details() -> Vec<RequestDetails> {
         use FieldType::Dropdown;
@@ -900,13 +876,6 @@ mod tests {
                 true,
             ),
             detail(
-                field_keys::MONITOR,
-                "All",
-                SelectableId::String("all".into()),
-                Dropdown,
-                true,
-            ),
-            detail(
                 field_keys::SERIES_TYPE,
                 "Standard",
                 SelectableId::String("standard".into()),
@@ -920,6 +889,7 @@ mod tests {
                 Dropdown,
                 true,
             ),
+            season_field(&[1], &[0]),
         ]
     }
 
@@ -928,9 +898,18 @@ mod tests {
         let selected = SelectedDetails::try_from(full_details()).unwrap();
         assert_eq!(selected.rootfolder_path.as_deref(), Some("/tv"));
         assert_eq!(selected.quality_profile_id, Some(3));
-        assert_eq!(selected.monitor, Some(MonitorTypes::All));
         assert_eq!(selected.series_type, Some(SeriesTypes::Standard));
         assert_eq!(selected.season_folder, Some(true));
+        assert_eq!(selected.season_numbers, vec![1]);
+    }
+
+    #[test]
+    fn try_from_collects_multiple_seasons() {
+        let mut details = full_details();
+        // Replace the season picker with one that has three seasons, two chosen.
+        *details.last_mut().unwrap() = season_field(&[3, 2, 1], &[0, 2]);
+        let selected = SelectedDetails::try_from(details).unwrap();
+        assert_eq!(selected.season_numbers, vec![3, 1]);
     }
 
     #[test]
@@ -948,12 +927,31 @@ mod tests {
     #[test]
     fn try_from_unselected_multi_option_field_errors() {
         let mut details = full_details();
-        details[2].options.push(DropdownOption {
-            title: "Future".into(),
+        // Quality profile with two options and nothing selected must error.
+        details[1].options.push(DropdownOption {
+            title: "4K".into(),
             description: None,
-            id: Some(SelectableId::String("future".into())),
+            id: Some(SelectableId::Integer(4)),
         });
-        details[2].selected_indices = vec![];
+        details[1].selected_indices = vec![];
         assert!(SelectedDetails::try_from(details).is_err());
+    }
+
+    #[test]
+    fn seasons_to_monitor_skips_already_monitored() {
+        assert_eq!(seasons_to_monitor(&[1, 2, 3], &[2]), vec![1, 3]);
+        assert_eq!(seasons_to_monitor(&[1, 2], &[5]), vec![1, 2]);
+    }
+
+    #[test]
+    fn seasons_to_monitor_empty_when_all_dups() {
+        assert!(seasons_to_monitor(&[1, 2], &[1, 2, 3]).is_empty());
+    }
+
+    #[test]
+    fn format_seasons_renders() {
+        assert_eq!(format_seasons(&[]), "");
+        assert_eq!(format_seasons(&[3]), "Season 3");
+        assert_eq!(format_seasons(&[3, 1, 2]), "Seasons 1, 2, 3");
     }
 }

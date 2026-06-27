@@ -1,7 +1,7 @@
 use anyhow::Context;
 use radarr_api::models::{MonitorTypes as RadarrMonitor, MovieStatusType};
 use serde::{Deserialize, Serialize};
-use sonarr_api::models::{MonitorTypes as SonarrMonitor, SeriesTypes};
+use sonarr_api::models::SeriesTypes;
 use std::fs;
 
 #[derive(Deserialize, Serialize, Debug, Default, PartialEq, Eq)]
@@ -39,14 +39,11 @@ pub enum BackendConfig {
     Sonarr {
         url: String,
         api_key: String,
-        monitor_type: Option<SonarrMonitor>,
         quality_profile: Option<String>,
         rootfolder: Option<String>,
         series_type: Option<SeriesTypes>,
         season_folders: Option<bool>,
-        /// Restrict which monitor types users can select (e.g., to prevent "All")
-        allowed_monitor_types: Option<Vec<SonarrMonitor>>,
-        /// Offer Season 0 (specials) when requesting seasons of existing series (default: false)
+        /// Offer Season 0 (specials) in the season picker (default: false)
         allow_specials: Option<bool>,
     },
     Seerr {
