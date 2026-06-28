@@ -193,6 +193,11 @@ services:
       OVERSEERR__API: your_seerr_api_key
 ```
 
+As in the Clojure bot, `OVERSEERR__*` creates separate `movie` and `series`
+commands (media-filtered Seerr backends) and takes precedence over
+`SONARR__*`/`RADARR__*`, which are ignored when Overseerr is configured since it
+already fronts them.
+
 Doplarr also writes the generated `config.toml` (wired to these variables via
 `${...}`) when it can, so mounting a volume lets you keep and customize it. With
 no volume it's simply rebuilt from the environment each start.

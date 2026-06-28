@@ -189,29 +189,52 @@ fn generate_from_env(is_set: impl Fn(&str) -> bool) -> Option<String> {
 
     let mut backends = String::new();
 
-    if is_set("OVERSEERR__URL") && is_set("OVERSEERR__API") {
-        backends.push_str(
-            "\n[[backends]]\nmedia = \"media\"\n\n[backends.config.Seerr]\n\
-             url = \"${OVERSEERR__URL}\"\napi_key = \"${OVERSEERR__API}\"\n",
-        );
-        if is_set("OVERSEERR__DEFAULT_ID") {
-            // Unquoted so the substituted value parses as an integer
-            backends.push_str("fallback_user_id = ${OVERSEERR__DEFAULT_ID}\n");
+    let seerr = is_set("OVERSEERR__URL") && is_set("OVERSEERR__API");
+    let sonarr = is_set("SONARR__URL") && is_set("SONARR__API");
+    let radarr = is_set("RADARR__URL") && is_set("RADARR__API");
+
+    if seerr {
+        // The legacy Clojure bot exposed Overseerr as separate movie and series
+        // commands, so mirror that with two media-filtered Seerr backends rather
+        // than one combined command. Overseerr fronts Sonarr/Radarr, so when it
+        // is configured it owns both commands and the direct *arr backends are
+        // skipped to avoid duplicate command names.
+        if sonarr || radarr {
+            eprintln!(
+                "Note: OVERSEERR__* is set, so requests are routed through Seerr and the \
+                 SONARR__*/RADARR__* variables are ignored. Remove the Overseerr variables \
+                 (or edit the generated config) if you want to request from Sonarr/Radarr directly."
+            );
         }
-    }
 
-    if is_set("SONARR__URL") && is_set("SONARR__API") {
-        backends.push_str(
-            "\n[[backends]]\nmedia = \"series\"\n\n[backends.config.Sonarr]\n\
-             url = \"${SONARR__URL}\"\napi_key = \"${SONARR__API}\"\n",
-        );
-    }
+        let mut push_seerr = |media: &str, filter: &str| {
+            backends.push_str(&format!(
+                "\n[[backends]]\nmedia = \"{media}\"\n\n[backends.config.Seerr]\n\
+                 url = \"${{OVERSEERR__URL}}\"\napi_key = \"${{OVERSEERR__API}}\"\n\
+                 media_filter = \"{filter}\"\n"
+            ));
+            if is_set("OVERSEERR__DEFAULT_ID") {
+                // Unquoted so the substituted value parses as an integer
+                backends.push_str("fallback_user_id = ${OVERSEERR__DEFAULT_ID}\n");
+            }
+        };
 
-    if is_set("RADARR__URL") && is_set("RADARR__API") {
-        backends.push_str(
-            "\n[[backends]]\nmedia = \"movie\"\n\n[backends.config.Radarr]\n\
-             url = \"${RADARR__URL}\"\napi_key = \"${RADARR__API}\"\n",
-        );
+        push_seerr("movie", "movie");
+        push_seerr("series", "tv");
+    } else {
+        if sonarr {
+            backends.push_str(
+                "\n[[backends]]\nmedia = \"series\"\n\n[backends.config.Sonarr]\n\
+                 url = \"${SONARR__URL}\"\napi_key = \"${SONARR__API}\"\n",
+            );
+        }
+
+        if radarr {
+            backends.push_str(
+                "\n[[backends]]\nmedia = \"movie\"\n\n[backends.config.Radarr]\n\
+                 url = \"${RADARR__URL}\"\napi_key = \"${RADARR__API}\"\n",
+            );
+        }
     }
 
     if backends.is_empty() {
@@ -402,7 +425,7 @@ mod tests {
     }
 
     #[test]
-    fn generate_from_env_wires_detected_backends() {
+    fn generate_from_env_splits_seerr_into_movie_and_series() {
         let set = [
             "DISCORD__TOKEN",
             "OVERSEERR__URL",
@@ -412,11 +435,60 @@ mod tests {
         let toml = generate_from_env(|k| set.contains(&k)).expect("should generate");
 
         assert!(toml.contains(r#"discord_token = "${DISCORD__TOKEN}""#));
-        assert!(toml.contains("[backends.config.Seerr]"));
         assert!(toml.contains(r#"url = "${OVERSEERR__URL}""#));
-        assert!(toml.contains("fallback_user_id = ${OVERSEERR__DEFAULT_ID}"));
-        // Sonarr/Radarr not detected, so not present.
-        assert!(!toml.contains("Sonarr"));
+        // Two media-filtered Seerr backends, mirroring the Clojure movie/series split.
+        assert!(toml.contains(r#"media = "movie""#));
+        assert!(toml.contains(r#"media = "series""#));
+        assert!(toml.contains(r#"media_filter = "movie""#));
+        assert!(toml.contains(r#"media_filter = "tv""#));
+        // fallback_user_id wired onto both backends.
+        assert_eq!(toml.matches("fallback_user_id = ${OVERSEERR__DEFAULT_ID}").count(), 2);
+        // No combined "media" command anymore.
+        assert!(!toml.contains(r#"media = "media""#));
+
+        // The whole generated config must round-trip once the env is substituted.
+        let expanded = expand_env_vars_for_test(&toml);
+        Config::from_toml_str(&expanded, "test").expect("generated config must parse");
+    }
+
+    #[test]
+    fn generate_from_env_overseerr_takes_precedence_over_arr() {
+        // Everything set: Overseerr fronts the *arrs, so direct Sonarr/Radarr
+        // backends are skipped to avoid duplicate command names.
+        let toml = generate_from_env(|_| true).expect("should generate");
+        assert!(toml.contains("[backends.config.Seerr]"));
+        assert!(!toml.contains("[backends.config.Sonarr]"));
+        assert!(!toml.contains("[backends.config.Radarr]"));
+    }
+
+    #[test]
+    fn generate_from_env_uses_direct_arr_without_overseerr() {
+        let set = ["DISCORD__TOKEN", "SONARR__URL", "SONARR__API"];
+        let toml = generate_from_env(|k| set.contains(&k)).expect("should generate");
+        assert!(toml.contains("[backends.config.Sonarr]"));
+        assert!(toml.contains(r#"media = "series""#));
+        assert!(!toml.contains("Seerr"));
         assert!(!toml.contains("Radarr"));
+    }
+
+    /// Substitute the env vars that the generated configs reference so the
+    /// result can be parsed in tests, without touching the real environment.
+    fn expand_env_vars_for_test(toml: &str) -> String {
+        let pairs = [
+            ("${DISCORD__TOKEN}", "tok"),
+            ("${OVERSEERR__URL}", "http://seerr:5055"),
+            ("${OVERSEERR__API}", "key"),
+            ("${OVERSEERR__DEFAULT_ID}", "1"),
+            ("${SONARR__URL}", "http://sonarr:8989"),
+            ("${SONARR__API}", "key"),
+            ("${RADARR__URL}", "http://radarr:7878"),
+            ("${RADARR__API}", "key"),
+            ("${LOG_LEVEL}", "info"),
+        ];
+        let mut out = toml.to_string();
+        for (from, to) in pairs {
+            out = out.replace(from, to);
+        }
+        out
     }
 }

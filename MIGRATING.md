@@ -50,6 +50,8 @@ If you ran the Clojure bot with **only environment variables and no mounted conf
 
 Only connection settings (URL/API, plus the Seerr fallback user) are read from the environment; per-backend options like quality profiles are no longer prompted via env vars — set them by mounting a config file. Doplarr writes the generated `config.toml` (wired to the variables above via `${...}`) when it can, so mounting a volume lets you keep and extend it.
 
+**Overseerr generates two commands.** Mirroring the Clojure bot, `OVERSEERR__*` produces separate `movie` and `series` commands (two `[[backends]]` entries with `media_filter = "movie"` / `media_filter = "tv"`). Because Overseerr fronts Sonarr/Radarr, it takes precedence: if `OVERSEERR__*` is set, the `SONARR__*`/`RADARR__*` variables are ignored (with a note logged at startup). Set up the direct `SONARR__*`/`RADARR__*` backends only when you're not using Overseerr.
+
 You can also reference environment variables from anywhere in a config file with `${VAR}`:
 
 ```toml
