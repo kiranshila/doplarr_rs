@@ -14,6 +14,11 @@ on:
         paths-ignore: *docs-paths
     workflow_dispatch:
 
+# Cancel superseded runs for the same branch/PR - these nix jobs are heavy.
+concurrency:
+    group: ci-${{ github.ref }}
+    cancel-in-progress: true
+
 permissions:
     contents: read
     packages: write
@@ -41,8 +46,12 @@ jobs:
             - name: Build clippy SARIF report
               run: nix build .#clippy-sarif --print-build-logs --out-link clippy-result
 
+            # Fork PRs get a read-only token (no security-events: write), so
+            # this upload 403s for them - don't let that fail the run; the
+            # clippy gate in the flake check is the real enforcement.
             - name: Upload clippy SARIF
               if: always()
+              continue-on-error: true
               uses: github/codeql-action/upload-sarif@v3
               with:
                   sarif_file: clippy-result/clippy.sarif
