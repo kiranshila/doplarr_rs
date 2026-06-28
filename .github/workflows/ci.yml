@@ -22,6 +22,9 @@ jobs:
     check:
         name: Nix Flake Check
         runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            security-events: write # upload clippy findings as code scanning results
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
@@ -32,8 +35,21 @@ jobs:
             - name: Setup Nix cache
               uses: DeterminateSystems/magic-nix-cache-action@v7
 
+            # Compiles clippy once and emits a SARIF report with repo-relative
+            # paths. Built before the gate so the report uploads even when there
+            # are findings (the flake check's `clippy` gate then fails the run).
+            - name: Build clippy SARIF report
+              run: nix build .#clippy-sarif --print-build-logs --out-link clippy-result
+
+            - name: Upload clippy SARIF
+              if: always()
+              uses: github/codeql-action/upload-sarif@v3
+              with:
+                  sarif_file: clippy-result/clippy.sarif
+                  category: clippy
+
             - name: Run flake checks
-              run: nix flake check --print-build-logs
+              run: nix flake check --print-build-logs --keep-going
 
     build-and-push:
         name: Build and Push Docker Image
