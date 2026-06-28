@@ -40,6 +40,14 @@
 
         src = craneLib.cleanCargoSource ./.;
 
+        # The build sandbox has no `.git`, so hand the binary's build.rs the
+        # flake's own revision. `shortRev` is present for a clean tree, and
+        # `dirtyShortRev` for a working tree with uncommitted changes; both are
+        # absent (falling back to "unknown") when built from a tarball with no
+        # git metadata. Passed only to the final binaries below - not to
+        # buildDepsOnly - so the dependency cache survives across commits.
+        gitRev = self.shortRev or self.dirtyShortRev or "unknown";
+
         commonArgs = {
           inherit src;
           strictDeps = true;
@@ -57,6 +65,7 @@
           // {
             pname = "doplarr";
             cargoExtraArgs = "-p doplarr";
+            GIT_HASH = gitRev;
           }
         );
 
@@ -81,6 +90,7 @@
           cargoArtifacts = cargoArtifactsMusl;
           pname = "doplarr";
           cargoExtraArgs = "-p doplarr";
+          GIT_HASH = gitRev;
         });
 
         # Static musl binary — aarch64
@@ -104,6 +114,7 @@
           cargoArtifacts = cargoArtifactsAarch64Musl;
           pname = "doplarr";
           cargoExtraArgs = "-p doplarr";
+          GIT_HASH = gitRev;
         });
 
       in {
