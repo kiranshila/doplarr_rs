@@ -442,7 +442,11 @@ mod tests {
         assert!(toml.contains(r#"media_filter = "movie""#));
         assert!(toml.contains(r#"media_filter = "tv""#));
         // fallback_user_id wired onto both backends.
-        assert_eq!(toml.matches("fallback_user_id = ${OVERSEERR__DEFAULT_ID}").count(), 2);
+        assert_eq!(
+            toml.matches("fallback_user_id = ${OVERSEERR__DEFAULT_ID}")
+                .count(),
+            2
+        );
         // No combined "media" command anymore.
         assert!(!toml.contains(r#"media = "media""#));
 
